@@ -1,0 +1,52 @@
+<mxfile host="65bd71144e">
+    <diagram id="mPhPeCEU2sq3P_vmCf37" name="Top Level">
+        <mxGraphModel dx="916" dy="694" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;fontFamily=Courier New;fontSize=13;" parent="1" source="ZwhexHDq3JxU943sYQ1g-1" target="ZwhexHDq3JxU943sYQ1g-9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-1" value="&lt;div style=&quot;font-size: 13px;&quot;&gt;ahb inputs:&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;hsel&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;haddr[3:0]&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;htrans[2:0]&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;hsize[2:0]&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;hwrite&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;hwdata[31:0]&lt;br style=&quot;font-size: 13px;&quot;&gt;&lt;/div&gt;" style="whiteSpace=wrap;html=1;fontSize=13;fontFamily=Courier New;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="40" width="180" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-2" value="&lt;div style=&quot;font-size: 13px;&quot;&gt;address mapping&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;0x0: 4 R/W data buffer&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;0x4: 2 R&amp;nbsp;&amp;nbsp; status register&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;0x6: 2 R&amp;nbsp;&amp;nbsp; error register&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;0x8: 1 R&amp;nbsp;&amp;nbsp; buffer occupancy&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;0xC: 1 R/W TX packet control&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;0xD: 1 R/W flush buffer control&lt;br style=&quot;font-size: 13px;&quot;&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=13;fontFamily=Courier New;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="575" width="270" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-3" value="&lt;div style=&quot;font-size: 13px;&quot;&gt;ahb outputs:&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;hrdata[31:0]&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;hresp&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;hready&lt;br style=&quot;font-size: 13px;&quot;&gt;&lt;/div&gt;" style="whiteSpace=wrap;html=1;fontSize=13;fontFamily=Courier New;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="40" width="160" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Courier New;fontSize=13;" parent="1" source="ZwhexHDq3JxU943sYQ1g-5" target="ZwhexHDq3JxU943sYQ1g-9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-5" value="&lt;div style=&quot;font-size: 13px;&quot;&gt;rx inputs:&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;rx_packet[3:0]&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;rx_data_ready&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;rx_transfer_active&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;rx_error&lt;br style=&quot;font-size: 13px;&quot;&gt;&lt;/div&gt;" style="whiteSpace=wrap;html=1;fontSize=13;fontFamily=Courier New;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="190" width="180" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;fontFamily=Courier New;fontSize=13;" parent="1" source="ZwhexHDq3JxU943sYQ1g-6" target="ZwhexHDq3JxU943sYQ1g-9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-6" value="&lt;div style=&quot;font-size: 13px;&quot;&gt;tx inputs:&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;tx_transfer_active&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;tx_error&lt;br style=&quot;font-size: 13px;&quot;&gt;&lt;/div&gt;" style="whiteSpace=wrap;html=1;fontSize=13;fontFamily=Courier New;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="310" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-7" value="&lt;div style=&quot;font-size: 13px;&quot;&gt;tx outputs:&lt;/div&gt;&lt;div style=&quot;font-size: 13px;&quot;&gt;tx_packet[2:0]&lt;br style=&quot;font-size: 13px;&quot;&gt;&lt;/div&gt;" style="whiteSpace=wrap;html=1;fontSize=13;fontFamily=Courier New;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="150" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-8" value="&lt;div style=&quot;font-size: 13px&quot;&gt;&lt;div&gt;general outputs:&lt;/div&gt;&lt;div&gt;d_mode&lt;br&gt;&lt;/div&gt;&lt;/div&gt;" style="whiteSpace=wrap;html=1;fontSize=13;fontFamily=Courier New;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="230" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Courier New;fontSize=13;" parent="1" source="ZwhexHDq3JxU943sYQ1g-9" target="ZwhexHDq3JxU943sYQ1g-3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Courier New;fontSize=13;" parent="1" source="ZwhexHDq3JxU943sYQ1g-9" target="ZwhexHDq3JxU943sYQ1g-7" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Courier New;fontSize=13;" parent="1" source="ZwhexHDq3JxU943sYQ1g-9" target="ZwhexHDq3JxU943sYQ1g-8" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ZwhexHDq3JxU943sYQ1g-9" value="AHB-lite Slave" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Courier New;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="40" width="200" height="370" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
