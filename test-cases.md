@@ -3,17 +3,17 @@ Note, run each using AHB side and USB side inputs. Also check buffer occupancy a
 - Write data
 - Read back data
 - Read when empty
-- Write when full
+- Write when full (should do nothing)
 - Write 64, then read
 - Write, flush, read
-- Push when full (should drop first element in queue?)
 
 # AHB Lite Slave
 - Reset, check for default values
+- Read default of every address
 - Write to each invalid address (3 cases)
 - Write to read only
-- Read default of every address
 - Make sure at least one read and write of each size occurs, and at each misalignment (2 byte with high LSB, 4 byte with high LSB and 2 LSBs)
+- Overlapping reads / writes of all data sizes
 - Read and write without asserting select
 - Write and read from zero address
 - Read status, error, and occupancy registers (test each value separately)
@@ -43,5 +43,4 @@ Note, run each using AHB side and USB side inputs. Also check buffer occupancy a
 - Receive data with bad sync
 - Receive data with bad PID (invalid number and inverted version wrong)
 - Receive data with bad CRC
-- Receive data with bad/no EOP
 - Handshake packet that has data
