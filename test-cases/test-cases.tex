@@ -1,14 +1,10 @@
 \documentclass{scrartcl}
-%\documentclass{article}
 
 \usepackage{hyperref}
 \usepackage{longtable, booktabs}
 \usepackage{enumitem}
 \usepackage{tikz}
 
-%\setlist{nosep, left=0pt}
-
-%\title{Test Planning for Cooperative Design Lab \\[0.4cm] \Large AHB-lite / USB}
 \title{Test Planning for Cooperative Design Lab}
 \subtitle{AHB-lite / USB}
 \author{ Bryce Berger \and Trevor Moorman \and Robert Sammelson }
@@ -19,7 +15,7 @@
 \tableofcontents
 \newpage
 
-\section{Top-level}
+%\section{Top-level}
 
 \section{AHB-lite}
 
@@ -138,6 +134,40 @@ There should not be an error when writing to addresses adjacent to unused space.
 \end{enumerate}
 
 \section{FIFO}
+
+\subsection{Filling}
+For all filling test cases, start from a clean reset. 
+
+\subsubsection{Filling from USB RX}
+\begin{enumerate}
+    \item Write single byte using USB RX signals. Expect RX Data output signal to change.
+    \item Write 10-20 bytes using USB RX signals. Expect RX Data output to show the first transmitted.
+    \item Write 64 bytes using USB RX signals. Expect RX Data output to show the first transmitted.
+\end{enumerate}
+
+\subsubsection{Filling from AHB-lite slave}
+\begin{enumerate}
+    \item Write single byte using AHB-lite slave signals. Expect RX Data output signal to change.
+    \item Write 10-20 bytes using AHB-lite slave signals. Expect RX Data output to show the first transmitted.
+    \item Write 64 bytes using AHB-lite slave signals. Expect RX Data output to show the first transmitted.
+\end{enumerate}
+
+\subsection{Draining}
+For all draining test cases, start by filling with either USB RX or AHB-lite slave signals.
+
+\subsubsection{Draining from USB TX}
+\begin{enumerate}
+    \item Fill a single byte using AHB-lite. Drain with USB TX. Expect to receive byte that was input.
+    \item Fill 10-20 bytes using AHB-lite. Drain with USB TX. Expect to receive bytes in order of input (first in, first out).
+    \item Fill 64 bytes using AHB-lite. Drain with USB TX. Expect to receive bytes in order of input.
+\end{enumerate}
+
+\subsubsection{Draining from AHB-lite slave}
+\begin{enumerate}
+    \item Fill a single byte using USB RX. Drain with AHB-lite slave. Expect to receive byte that was input.
+    \item Fill 10-20 bytes using USB RX. Drain with AHB-lite slave. Expect to receive bytes in order of input (first in, first out).
+    \item Fill 64 bytes using USB RX. Drain with AHB-lite slave. Expect to receive bytes in order of input.
+\end{enumerate}
 
 \section{USB RX}
 
