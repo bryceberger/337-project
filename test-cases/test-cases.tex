@@ -1,0 +1,146 @@
+\documentclass{scrartcl}
+%\documentclass{article}
+
+\usepackage{hyperref}
+\usepackage{longtable, booktabs}
+\usepackage{enumitem}
+\usepackage{tikz}
+
+%\setlist{nosep, left=0pt}
+
+%\title{Test Planning for Cooperative Design Lab \\[0.4cm] \Large AHB-lite / USB}
+\title{Test Planning for Cooperative Design Lab}
+\subtitle{AHB-lite / USB}
+\author{ Bryce Berger \and Trevor Moorman \and Robert Sammelson }
+\date{November 28, 2022}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Top-level}
+
+\section{AHB-lite}
+
+\subsection{Isolated single read/write}
+
+For every isolated test case, wait more than 1 clock cycle between read and write.
+
+\subsubsection{4 byte read/write}
+\label{s4brr}
+In the following test cases, expect to read the same value as was just written. Because there is no section of memory that is both R/W and 4 bytes, we will test the addresses 0xC --- 0xF. 4 byte reads and writes should be accepted at those addresses, but addresses 0xE and 0xF are unused.
+\begin{enumerate}
+    \item Aligned write to 4-byte address, followed by read from same address (0xC and 0xC).
+    \item Aligned write, followed by unaligned read (0xC and 0xE).
+    \item Unaligned write, aligned read.
+    \item Unaligned write, unaligned read.
+\end{enumerate}
+
+\subsubsection{2 byte read/write}
+\label{s2brr}
+Similarly, expect to read the same value as was just written. The memory section from 0xC to 0xD is used again, as the only (non-special) R/W memory section.
+\begin{enumerate}
+    \item Aligned write to 2-byte address, followed by read from same address (0xC and 0xC).
+    \item Aligned write, followed by unaligned read (0xC and 0xD).
+    \item Unaligned write, aligned read.
+    \item Unaligned write, unaligned read.
+\end{enumerate}
+
+\subsubsection{1 byte read/write}
+\begin{enumerate}
+    \item
+    \begin{enumerate}
+        \item Write to 0xC
+        \item Write to 0xD
+        \item Read from 0xD
+        \item Read from 0xC
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Overlapping read/write}
+For overlapping test cases, execute read and write on directly adjacent clock cycles.
+
+\subsubsection{4 byte read/write}
+See \autoref{s4brr} for notes about 4 byte accesses.
+\begin{enumerate}
+    \item Aligned write to 4-byte address, followed by read from same address (0xC and 0xC).
+    \item Aligned write, followed by unaligned read (0xC and 0xE).
+    \item Unaligned write, aligned read.
+    \item Unaligned write, unaligned read.
+\end{enumerate}
+
+\subsubsection{2 byte read/write}
+See \autoref{s2brr} for notes about 2 byte accesses.
+\begin{enumerate}
+    \item Aligned write to 2-byte address, followed by read from same address (0xC and 0xC).
+    \item Aligned write, followed by unaligned read (0xC and 0xD).
+    \item Unaligned write, aligned read.
+    \item Unaligned write, unaligned read.
+\end{enumerate}
+
+\subsubsection{1 byte read/write}
+\begin{enumerate}
+    \item
+    \begin{enumerate}
+        \item Write to 0xC
+        \item Write to 0xD
+        \item Read from 0xD
+        \item Read from 0xC
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Writing to read only}
+For each of these tests, \texttt{hready} and \texttt{hresp} should be as shown in \autoref{fig:errorwave}.
+\begin{figure}
+    \begin{center}
+        \begin{tikzpicture}
+            \draw (0, 2.5) node [left] {\texttt{clk}} (0, 2) -- (0, 3) -- (2, 3) -- (2, 2) -- (4, 2) -- (4, 3) -- (6, 3) -- (6, 2) -- (8, 2) -- (8, 3);
+            \draw (0, 0.5) node [left] {\texttt{hready}} (0, 1) -- (1, 1) -- (1, 0) -- (5, 0) -- (5, 1) -- (8, 1);
+            \draw (0, -1.5) node [left] {\texttt{hresp}} (0, -2) -- (1, -2) -- (1, -1) -- (8, -1) -- (8, -2);
+        \end{tikzpicture}
+    \end{center}
+    \caption{Expected \texttt{hready} and \texttt{hresp} after error}
+    \label{fig:errorwave}
+\end{figure}
+That is, \texttt{hready} extends the transaction for a clock cycle, while \texttt{hresp} asserts that there was an error with the transaction.
+
+\begin{enumerate}
+    \item 4 byte write to read only (0x6)
+    \item 2 byte write to read only (0x5)
+    \item 1 byte write to read only (0x8)
+\end{enumerate}
+
+\subsection{Access to unused addresses}
+
+\subsubsection{Direct access}
+If directly and exclusively written to, unused addresses should trigger an error. This will have the same response as shown in \autoref{fig:errorwave}. If read from, they should always return 0.
+
+\begin{enumerate}
+    \item 2 byte write to 0xE.
+    \item 1 byte write to 0x9.
+\end{enumerate}
+
+\subsubsection{Indirect access}
+There should not be an error when writing to addresses adjacent to unused space. However, regardless of what is written, these addresses should report 0 when read.
+
+\begin{enumerate}
+    \item
+    \begin{enumerate}
+        \item 2 byte write to 0x8.
+        \item 1 byte read from 0x9.
+    \end{enumerate}
+    \item
+    \begin{enumerate}
+        \item 4 byte write to 0xC.
+        \item 2 byte read from 0xF.
+    \end{enumerate}
+\end{enumerate}
+
+\section{FIFO}
+
+\section{USB RX}
+
+\section{USB TX}
+
+\end{document}
