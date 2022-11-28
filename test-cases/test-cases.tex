@@ -202,5 +202,64 @@ packet should be sent, and this packet should be recieved correctly.
 \end{enumerate}
 
 \section{USB TX}
+	\subsection{Correct behavior during nominal packet transmission} \label{sec:packet-trans}
+		\subsubsection{ACK}
+			\begin{enumerate}
+            	\item Send ACK.
+                \item Check 'sync' byte was properly sent.
+                \item Check ACK 'pid' byte was properly sent.
+                \item Check 'EOP' was properly asserted for 2 bit periods.
+            \end{enumerate}
+		\subsubsection{NAK}
+			\begin{enumerate}
+            	\item Send NAK.
+                \item Check 'sync' byte was properly sent.
+                \item Check NAK 'pid' byte was properly sent.
+                \item Check 'EOP' was properly asserted for 2 bit periods.
+            \end{enumerate}
+		\subsubsection{DATA0}
+        	Each DATA0 packet will include the following checks.
+            \begin{enumerate}
+            	\item Check 'sync' byte was properly sent.
+                \item Check ACK 'pid' byte was properly sent.
+                \item Check 'EOP' was properly sent.
+            \end{enumerate}
+            Will send DATA0 packets with the following amounts of data.
+			\begin{enumerate}
+            	\item 0 bytes of data.
+                \item 1 byte of data.
+                \item 32 bytes of data.
+                \item 64 bytes of data.
+            \end{enumerate}
+		\subsubsection{STALL}
+			\begin{enumerate}
+            	\item Send STALL.
+                \item Check 'sync' byte was properly sent.
+                \item Check STALL 'pid' byte was properly sent.
+                \item Check 'EOP' was properly asserted for 2 bit periods.
+            \end{enumerate}
+	
+	\subsection{Correct behavior during the NRZI encoding of the outgoing bit-stream}
+		Throughout all tests described in \autoref{sec:packet-trans}, ensure that both d\textsubscript{plus} and d\textsubscript{minus} properly decode to d\textsubscript{orig}.
+
+	\subsection{Correct behavior during the bit-stuffing of the outgoing bit-stream}
+		\subsubsection{Bit-stuffing at beginning of data0 packet}
+        	\begin{enumerate}
+            	\item Send a DATA0 packet containing one byte of data that is 0xFF.
+                \item Check that a bit-stuff occurred after the fourth bit of data.
+            \end{enumerate}
+		\subsubsection{Bit-stuffing in middle of data}
+        	\begin{enumerate}
+            	\item Send a DATA1 packet containing one byte of data that is 0xFF.
+                \item Check that a bit-stuff occurred after the sixth bit of data.
+            \end{enumerate}
+		\subsubsection{Bit-stuffing at end of data}
+			\begin{enumerate}
+            	\item Send a DATA1 packet containing one byte of data that is 0x3F.
+                \item Check that a bit-stuff occurred after the eighth bit of data.
+            \end{enumerate}
+	
+    \subsection{Correct inclusion of calculated CRC values}
+		Throughout all tests described in \autoref{sec:packet-trans}, ensure all packets include the correct CRC value which were manually calculated beforehand.
 
 \end{document}
