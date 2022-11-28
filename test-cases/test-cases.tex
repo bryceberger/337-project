@@ -1,6 +1,6 @@
 \documentclass{scrartcl}
 
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
 \usepackage{longtable, booktabs}
 \usepackage{enumitem}
 \usepackage{tikz}
@@ -170,6 +170,36 @@ For all draining test cases, start by filling with either USB RX or AHB-lite sla
 \end{enumerate}
 
 \section{USB RX}
+\subsection{Reset Verification}
+The RX module should be reset, and the correctness of the default outputs should be verified.
+
+\subsection{Nominal Packet Reception}
+\subsubsection{Token Packets}
+\begin{enumerate}
+    \item Ignore when endpoint or address does not match
+    \item Start reading data when endpoint and address match
+\end{enumerate}
+
+\subsubsection{Data Packets}
+Verify reciept for at least packets of length 0, 1, and 64 bytes.
+
+\subsubsection{Handshake Packets}
+Verify reciept of ACK and NAK; verify no error on STALL.
+
+\subsection{Erroneous Packet Reception}
+The following errors should be sent to the reciever, and the reciever should assert an error. Afterwards a valid
+packet should be sent, and this packet should be recieved correctly.
+\begin{enumerate}
+    \item Invalid sync byte
+    \item Invalid PID code
+    \item Incorrect negation of PID code
+    \item Invalid bit stuffing
+    \item Incorrect CRC (token packet)
+    \item Incorrect CRC (data packet: 0 byte, 1 byte, 64 byte)
+    \item Early EOP
+    \item Late EOP
+    \item EOP at invalid time
+\end{enumerate}
 
 \section{USB TX}
 
