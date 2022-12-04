@@ -59,6 +59,24 @@ module tb_usb_tx();
 	// Task to check 'sync' byte
 	task check_sync;
 	begin
+		logic [7:0] eop_byte;
+		logic [7:0] sync_byte;
+		
+		// Record output 'sync' byte
+		integer i;
+		for (i = 0; i < 8; i++) begin
+			@(negedge tb_clk);
+			decode_output(.EOP(eop_byte[i]), .Dorig(sync_byte[i]));
+		end
+		
+		// Check if EOP was ever asserted
+		assert(eop_byte != 8'd0) $error("Test case %0d: EOP falsely set during 'sync' byte", tb_test_case_num);
+		
+		// Check if correct 'sync' byte outputted
+		assert(sync_byte == 8'b00000001)
+			$info("Test case %0d: Correct 'sync' byte outputted", tb_test_case_num);
+		else
+			$error("Test case %0d: Incorrect 'sync' byte outputted (Expected=0b%b, Actual:0b%b)", tb_test_case_num, 8'b00000001, sync_byte);
 		
 	end
 	endtask
@@ -67,7 +85,25 @@ module tb_usb_tx();
 	task check_pid;
 		input logic [3:0] expected_pid;
 	begin
+		logic [7:0] expected_pid_byte = {expected_pid[3], expected_pid[2], expected_pid[1], expected_pid[0], ~(expected_pid[3]), ~(expected_pid[2]), ~(expected_pid[1]), ~(expected_pid[0])};
+		logic [7:0] eop_byte;
+		logic [7:0] pid_byte;
 		
+		// Record output 'pid' byte
+		integer i;
+		for (i = 0; i < 8; i++) begin
+			@(negedge tb_clk);
+			decode_output(.EOP(eop_byte[i]), .Dorig(pid_byte[i]));
+		end
+		
+		// Check if EOP was ever asserted
+		assert(eop_byte != 8'd0) $error("Test case %0d: EOP falsely set during 'pid' byte", tb_test_case_num);
+		
+		// Check if correct 'pid' byte outputted
+		assert(pid_byte == expected_pid_byte)
+			$info("Test case %0d: Correct 'pid' byte outputted", tb_test_case_num);
+		else
+			$error("Test case %0d: Incorrect 'pid' byte outputted (Expected=0b%b, Actual:0b%b)", tb_test_case_num, expected_pid_byte, pid_byte);
 	end
 	endtask
 	
@@ -83,14 +119,47 @@ module tb_usb_tx();
 	task check_crc;
 		input logic [15:0] expected_crc;
 	begin
+		logic [15:0] eop_bytes;
+		logic [15:0] crc_bytes;
 		
+		// Record output 'pid' byte
+		integer i;
+		for (i = 0; i < 16; i++) begin
+			@(negedge tb_clk);
+			decode_output(.EOP(eop_bytes[i]), .Dorig(crc_bytes[i]));
+		end
+		
+		// Check if EOP was ever asserted
+		assert(eop_bytes != 16'd0) $error("Test case %0d: EOP falsely set during CRC", tb_test_case_num);
+		
+		// Check if correct 'pid' byte outputted
+		assert(crc_bytes == expected_crc)
+			$info("Test case %0d: Correct CRC outputted", tb_test_case_num);
+		else
+			$error("Test case %0d: Incorrect CRC outputted (Expected=0b%b, Actual:0b%b)", tb_test_case_num, expected_pid_byte, pid_byte);
 	end
 	endtask
 	
 	// Task to check 'EOP'
 	task check_eop;
 	begin
-		
+		logic EOP;
+	
+		// Check if EOP is asserted for first clock cycle
+		@(negedge tb_clk);
+		decode_output(.EOP(EOP));
+		assert(EOP == 1'b1)
+			$info("Test case %0d: Correct EOP asserted for first clock cycle", tb_test_case_num);
+		else
+			$error("Test case %0d: Incorrect EOP unasserted for first clock cycle", tb_test_case_num);
+			
+		// Check if EOP is asserted for second clock cycle
+		@(negedge tb_clk);
+		decode_output(.EOP(EOP));
+		assert(EOP == 1'b1)
+			$info("Test case %0d: Correct EOP asserted for second clock cycle", tb_test_case_num);
+		else
+			$error("Test case %0d: Incorrect EOP unasserted for second clock cycle", tb_test_case_num);
 	end
 	endtask
 	
@@ -213,4 +282,3 @@ module tb_usb_tx();
 		
 	end
 endmodule
-
