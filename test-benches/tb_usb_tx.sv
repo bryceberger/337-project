@@ -13,17 +13,28 @@ module tb_usb_tx();
 	localparam CHECK_DELAY = 1ns;
 	localparam CLK_PERIOD = 10ns;
 	
+	localparam [1:0] TX_PACKET_DATA0 = 2'd0;
+	localparam [1:0] TX_PACKET_ACK = 2'd1;
+	localparam [1:0] TX_PACKET_NAK = 2'd2;
+	localparam [1:0] TX_PACKET_STALL = 2'd3;
+	
+	localparam [3:0] DATA0_PID = 4'b0011;
+	localparam [3:0] ACK_PID = 4'b0010;
+	localparam [3:0] NAK_PID = 4'b1010;
+	localparam [3:0] STALL_PID = 4'b1110;
+	
 	// Test Bench DUT Port Signals
-	reg tb_clk, tb_n_rst;
+	reg tb_clk, tb_n_rst, tb_TX_Start;
 	reg [1:0] tb_TX_Packet;
 	reg [6:0] tb_Buffer_Occupancy;
 	reg [7:0] tb_TX_Packet_Data;
 	wire tb_Dplus_Out, tb_Dminus_Out, tb_TX_Transfer_Active, tb_TX_Error, tb_Get_TX_Packet_Data
 	
 	// Test Bench Verification Signals
-	integer tb_test_case_num;
+	integer tb_test_num;
+	string tb_test_case;
 	reg tb_Dplus_Out_prev, tb_Dminus_Out_prev;
-	reg tb_expected_Dplus_Out, tb_expected_Dminus_Out, tb_expected_TX_Transfer_Active, tb_expected_TX_Error, tb_expected_Get_TX_Packet_Data;
+	reg tb_expected_Dorig, tb_expected_TX_Transfer_Active, tb_expected_TX_Error, tb_expected_Get_TX_Packet_Data;
 	
 	// Task for Resetting DUT
 	task reset_dut;
@@ -46,16 +57,39 @@ module tb_usb_tx();
 	endtask
 	
 	// Helper Task for Decoding Dplus_Out & Dminus_Out
-	task decode_output;
+	task decode_NRZI;
 		output logic EOP;
 		output logic Dorig; // Note: Dorig means nothing if EOP is asserted
 	begin
 		EOP = ((tb_Dplus_Out == 1'b1) && (tb_Dminus_Out == 1'b1)) ? 1'b1 : 1'b0;
 		Dorig = ((tb_Dplus_Out == tb_Dplus_Out_prev) && (tb_Dminus_Out == tb_Dminus_Out_prev)) ? 1'b1 : 1'b0;
+		
+		tb_Dplus_Out_prev = tb_Dplus_Out;
+		tb_Dminus_Out_prev = tb_Dminus_Out;
 	end
 	endtask
 	
-	// Tasks for Checking USB-TX's Outputs
+	// Task for checking USB-TX's direct outputs
+	task check_outputs;
+		input string check_tag;
+	begin
+		assert(tb_TX_Transfer_Active == tb_expected_TX_Transfer_Active)
+			$info("Test case %0d: Correct 'TX_Transfer_Active' output %s", check_tag);
+		else
+			$error("Test case %0d: Incorrect 'TX_Transfer_Active' output %s (Expected=0b%b, Actual=0b%b)", check_tag, tb_expected_TX_Transfer_Active, tb_TX_Transfer_Active);
+		
+		assert(tb_TX_Error == tb_expected_TX_Error)
+			$info("Test case %0d: Correct 'TX_Error' output %s", check_tag, tb_expected_TX_Error, tb_TX_Error);
+		else
+			$error("Test case %0d: Incorrect 'TX_Error' output %s (Expected=0b%b, Actual=0b%b)", check_tag);
+		
+		assert(tb_Get_TX_Packet_Data == tb_expected_Get_TX_Packet_Data)
+			$info("Test case %0d: Correct 'TX_Packet_Data' output %s", check_tag);
+		else
+			$error("Test case %0d: Incorrect 'TX_Packet_Data' output %s (Expected=0b%b, Actual=0b%b)", check_tag, tb_expected_Get_TX_Packet_Data, tb_Get_TX_Packet_Data);
+	end
+	endtask
+	
 	// Task to check 'sync' byte
 	task check_sync;
 	begin
@@ -66,7 +100,8 @@ module tb_usb_tx();
 		integer i;
 		for (i = 0; i < 8; i++) begin
 			@(negedge tb_clk);
-			decode_output(.EOP(eop_byte[i]), .Dorig(sync_byte[i]));
+			decode_NRZI(.EOP(eop_byte[i]), .Dorig(sync_byte[i]));
+			check_outputs("while outputting 'sync' byte");
 		end
 		
 		// Check if EOP was ever asserted
@@ -76,7 +111,7 @@ module tb_usb_tx();
 		assert(sync_byte == 8'b00000001)
 			$info("Test case %0d: Correct 'sync' byte outputted", tb_test_case_num);
 		else
-			$error("Test case %0d: Incorrect 'sync' byte outputted (Expected=0b%b, Actual:0b%b)", tb_test_case_num, 8'b00000001, sync_byte);
+			$error("Test case %0d: Incorrect 'sync' byte outputted (Expected=0b%b, Actual=0b%b)", tb_test_case_num, 8'b00000001, sync_byte);
 		
 	end
 	endtask
@@ -93,7 +128,8 @@ module tb_usb_tx();
 		integer i;
 		for (i = 0; i < 8; i++) begin
 			@(negedge tb_clk);
-			decode_output(.EOP(eop_byte[i]), .Dorig(pid_byte[i]));
+			decode_NRZI(.EOP(eop_byte[i]), .Dorig(pid_byte[i]));
+			check_outputs("while outputting 'pid' byte");
 		end
 		
 		// Check if EOP was ever asserted
@@ -103,7 +139,7 @@ module tb_usb_tx();
 		assert(pid_byte == expected_pid_byte)
 			$info("Test case %0d: Correct 'pid' byte outputted", tb_test_case_num);
 		else
-			$error("Test case %0d: Incorrect 'pid' byte outputted (Expected=0b%b, Actual:0b%b)", tb_test_case_num, expected_pid_byte, pid_byte);
+			$error("Test case %0d: Incorrect 'pid' byte outputted (Expected=0b%b, Actual=0b%b)", tb_test_case_num, expected_pid_byte, pid_byte);
 	end
 	endtask
 	
@@ -126,7 +162,8 @@ module tb_usb_tx();
 		integer i;
 		for (i = 0; i < 16; i++) begin
 			@(negedge tb_clk);
-			decode_output(.EOP(eop_bytes[i]), .Dorig(crc_bytes[i]));
+			decode_NRZI(.EOP(eop_bytes[i]), .Dorig(crc_bytes[i]));
+			check_outputs("while outputting CRC");
 		end
 		
 		// Check if EOP was ever asserted
@@ -136,7 +173,7 @@ module tb_usb_tx();
 		assert(crc_bytes == expected_crc)
 			$info("Test case %0d: Correct CRC outputted", tb_test_case_num);
 		else
-			$error("Test case %0d: Incorrect CRC outputted (Expected=0b%b, Actual:0b%b)", tb_test_case_num, expected_pid_byte, pid_byte);
+			$error("Test case %0d: Incorrect CRC outputted (Expected=0b%b, Actual=0b%b)", tb_test_case_num, expected_pid_byte, pid_byte);
 	end
 	endtask
 	
@@ -147,7 +184,8 @@ module tb_usb_tx();
 	
 		// Check if EOP is asserted for first clock cycle
 		@(negedge tb_clk);
-		decode_output(.EOP(EOP));
+		decode_NRZI(.EOP(EOP));
+		check_outputs("while outputting EOP for first clock cycle");
 		assert(EOP == 1'b1)
 			$info("Test case %0d: Correct EOP asserted for first clock cycle", tb_test_case_num);
 		else
@@ -155,7 +193,8 @@ module tb_usb_tx();
 			
 		// Check if EOP is asserted for second clock cycle
 		@(negedge tb_clk);
-		decode_output(.EOP(EOP));
+		decode_NRZI(.EOP(EOP));
+		check_outputs("while outputting EOP for second clock cycle");
 		assert(EOP == 1'b1)
 			$info("Test case %0d: Correct EOP asserted for second clock cycle", tb_test_case_num);
 		else
@@ -175,6 +214,7 @@ module tb_usb_tx();
 	usb_tx DUT (
 				.clk(tb_clk),
 				.n_rst(tb_n_rst),
+				.TX_Start(tb_TX_Start),
 				.TX_Packet(tb_TX_Packet),
 				.Buffer_Occupancy(tb_Buffer_Occupancy),
 				.TX_Packet_Data(tb_TX_Packet_Data),
@@ -188,97 +228,193 @@ module tb_usb_tx();
 	// Test Bench Main Process
 	initial
 	begin
-		// Initialize all test inputs
+		// Initialize all test bench signals
+		tb_test_num = 0;
+		tb_test_case = "TB Init";
 		tb_n_rst = 1'b1;
-		
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
+		tb_Dplus_Out_prev = 1'b1;
+		tb_Dminus_Out_prev = 1'b0;
+		tb_expected_Dorig = 1'b1;
+		tb_expected_TX_Transfer_Active = 1'b0;
+		tb_expected_TX_Error = 1'b0;
+		tb_expected_Get_TX_Packet_Data = 1'b0;
 		#(0.1);
 		
 		// **************************************************
 		// Test Case 1: Power-on Reset of DUT
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
+		tb_test_case = "Power-on Reset of DUT";
 		
+		// Apply reset by deasserting tb_n_rst
+		#(0.1);
+		tb_n_rst = 1'b0;
+		
+		// Check internal state was correctly reset
+		#(CLK_PERIOD * 0.5);
+		check_outputs("after reset applied");
+		
+		// Check internal state is maintained during a clock cycle
+		#(CLK_PERIOD);
+		check_outputs("after clock cycle while in reset");
+		
+		// Release reset away from a clock edge
+		@(negedge tb_clk);
+		tb_n_rst = 1'b1;
+		#(0.1);
+		
+		// Check internal state is maintained after reset released
+		check_outputs("after reset was released");
 		
 		// **************************************************
 		// Test Case 2: Nominal Packet Transmission - ACK
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Nominal Packet Transmission - ACK";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		// Set input signals
+		tb_TX_Start = 1'b1;
+		tb_TX_Packet = TX_PACKET_ACK;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
+		// Set expected outputs given above inputs
+		tb_expected_TX_Transfer_Active = 1'b1;
+		tb_expected_TX_Error = 1'b0;
+		tb_expected_Get_TX_Packet_Data = 1'b0;
+		
+		check_sync();
+		check_pid(ACK_PID);
+		check_eop();
 		
 		// **************************************************
 		// Test Case 3: Nominal Packet Transmission - NAK
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Nominal Packet Transmission - NAK";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		check_sync();
+		check_pid(NAK_PID);
+		check_eop();
 		
 		// **************************************************
 		// Test Case 4: Nominal Packet Transmission - DATA0 (0 bytes of data)
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Nominal Packet Transmission - DATA0 (0 bytes of data)";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
 		
+		//TODO
+		
 		// **************************************************
-		// Test Case 5: Nominal Packet Transmission - DATA0 (1 bytes of data)
+		// Test Case 5: Nominal Packet Transmission - DATA0 (1 byte of data)
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Nominal Packet Transmission - DATA0 (1 byte of data)";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		//TODO
 		
 		// **************************************************
 		// Test Case 6: Nominal Packet Transmission - DATA0 (32 bytes of data)
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Nominal Packet Transmission - DATA0 (32 bytes of data)";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		//TODO
 		
 		// **************************************************
 		// Test Case 7: Nominal Packet Transmission - DATA0 (64 bytes of data)
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Nominal Packet Transmission - DATA0 (64 bytes of data)";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		//TODO
 		
 		// **************************************************
 		// Test Case 8: Nominal Packet Transmission - STALL
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Nominal Packet Transmission - STALL";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		check_sync();
+		check_pid(STALL_PID);
+		check_eop();
 		
 		// **************************************************
 		// Test Case 9: Bit-Stuffing at Beginning of DATA0 Packet
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Bit-Stuffing at Beginning of DATA0 Packet";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		//TODO
 		
 		// **************************************************
 		// Test Case 10: Bit-Stuffing at Middle of DATA0 Packet
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Bit-Stuffing at Middle of DATA0 Packet";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		//TODO
 		
 		// **************************************************
 		// Test Case 11: Bit-Stuffing at End of DATA0 Packet
 		// **************************************************
 		tb_test_num = tb_test_num + 1;
-		tb_test_case = "";
-		//TODO: Reset to inactive values
+		tb_test_case = "Bit-Stuffing at End of DATA0 Packet";
+		tb_TX_Start = 1'b0;
+		tb_TX_Packet = 2'd0;
+		tb_Buffer_Occupancy = 7'd0;
+		tb_TX_Packet_Data = 8'd0;
 		reset_dut();
+		
+		//TODO
 		
 	end
 endmodule
