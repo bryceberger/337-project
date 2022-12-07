@@ -39,6 +39,7 @@ module ahb_lite_slave (
     output var [31:0] tx_data,
     output var clear_data_buffer
 );
+
     clocking ce @(posedge clk, negedge n_rst);
     endclocking
 
@@ -52,7 +53,6 @@ module ahb_lite_slave (
     // 0xE: reserved
     // 0xF: reserved
     logic [7:0] mem   [15:0];
-
     logic [1:0] size;
     logic       write;
     logic [3:0] addr;
@@ -82,7 +82,7 @@ module ahb_lite_slave (
             if (hsel && write && addr != 0) begin
                 mem[addr] <= hwdata[7:0];
                 if (size != 0) mem[addr+1] <= hwdata[15:8];
-                if (size > 1) {mem[addr+3], mem[addr+2]} <= hwdata[31:16];
+                else if (size > 1) {mem[addr+3], mem[addr+2]} <= hwdata[31:16];
             end
         end
     /* svlint on sequential_block_in_always_ff */
@@ -117,7 +117,6 @@ module ahb_lite_slave (
     always_ff @(ce)
         if (!n_rst) {size, write} <= 0;
         else {size, write} <= {hsize, hwrite};
-
 
     // have to set like this because otherwise would have to delay a cycle
     // upon reading 0x0 twice in a row
