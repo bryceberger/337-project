@@ -44,14 +44,13 @@ TOP_MODULE	:= $(notdir $(basename $(TOP_LEVEL_FILE)))
 # Select the Cell Library to use with simulations
 GATE_LIB		:= $(AMI_05_LIB)
 
-S_WORK_LIB := source_work/source
-S_TB_LIB := source_work/tb
-M_WORK_LIB := mapped_work/source
-M_WORK_LIB := mapped_work/tb
+S_WORK_LIB := source_work
+M_WORK_LIB := mapped_work
 
 LIB_CREATE	:= vlib
 COMPILE 		:= vlog -sv
-SIMULATE		:= vsim -Lf $(LABS_IP_LIB) -L $(GATE_LIB) -L $(GOLD_LIB) +no_glitch_msg -coverage -voptargs="+acc" -suppress 12110
+SIMULATE		:= vsim -Lf $(LABS_IP_LIB) -L $(GATE_LIB) -L $(GOLD_LIB) \
+				   +no_glitch_msg -coverage -voptargs="+acc" -suppress 12110
 DC_SHELL		:= dc_shell-t
 
 ##############################################################################
@@ -174,6 +173,13 @@ $(S_WORK_LIB)/%: source/%.sv | $(S_WORK_LIB)
 	@touch $@
 	@echo -e "Done compiling '$<' into work library '$(S_WORK_LIB)'"
 
+# Define a pattern rule to automatically compile updated source files for a design
+$(S_WORK_LIB)/tb_%: test-benches/tb_%.sv | $(S_WORK_LIB)
+	@echo -e "Compiling '$<' into work library '$(S_WORK_LIB)'"
+	@$(COMPILE) -work $(S_WORK_LIB) $< | tee $*.scomp ; exit "$${PIPESTATUS[0]}"
+	@touch $(@:tb_%=%)
+	@echo -e "Done compiling '$<' into work library '$(S_WORK_LIB)'"
+
 # Define a pattern rule to for use at commandline to compile source versions
 source_%: $(S_WORK_LIB)/%
 	@exit 0 # We cannot have an empty pattern rule in a makefile
@@ -184,17 +190,17 @@ $(M_WORK_LIB):
 	@rm -rf $@
 	@$(LIB_CREATE) $@
 
+# Define a pattern rule to automatically compile updated test bench files for a full mapped design
+$(M_WORK_LIB)/tb_%: test-benches/tb_%.sv | $(M_WORK_LIB)
+	@echo -e "Compiling '$<' into work library '$(M_WORK_LIB)'"
+	@$(COMPILE) -work $(M_WORK_LIB) $< | tee $*.mcomp; exit "$${PIPESTATUS[0]}"
+	@touch $@
+	@echo -e "Done compiling '$<' into work library '$(M_WORK_LIB)'"
+
 # Define a pattern rule to automatically compile updated mapped design files for a full mapped design
 $(M_WORK_LIB)/%: mapped/%.v | $(M_WORK_LIB)
 	@echo -e "Compiling '$<' into work library '$(M_WORK_LIB)'"
 	@$(COMPILE) -work $(M_WORK_LIB) $< | tee $*.mcomp ; exit "$${PIPESTATUS[0]}"
-	@touch $@
-	@echo -e "Done compiling '$<' into work library '$(M_WORK_LIB)'"
-
-# Define a pattern rule to automatically compile updated test bench files for a full mapped design
-$(M_WORK_LIB)/tb_%: test_benches/tb_%.sv | $(M_WORK_LIB)
-	@echo -e "Compiling '$<' into work library '$(M_WORK_LIB)'"
-	@$(COMPILE) -work $(M_WORK_LIB) $< | tee $*.mcomp; exit "$${PIPESTATUS[0]}"
 	@touch $@
 	@echo -e "Done compiling '$<' into work library '$(M_WORK_LIB)'"
 
@@ -206,51 +212,6 @@ mapped_%: $(M_WORK_LIB)/%
 mapped_tb_%: $(M_WORK_LIB)/tb_%
 	@exit 0 # We cannot have an empty pattern rule in a makefile
 
-# Define a pattern rule to automatically create the work library for a design source compile
-$(S_TB_LIB):
-	@echo -e "Creating work library: $@"
-	@rm -rf $@
-	@$(LIB_CREATE) $@
-
-# Define a pattern rule to automatically compile updated source files for a design
-$(S_TB_LIB)/%: test-benches/%.sv | $(S_TB_LIB)
-	@echo -e "Compiling '$<' into work library '$(S_TB_LIB)'"
-	@$(COMPILE) -work $(S_TB_LIB) $< | tee $*.scomp ; exit "$${PIPESTATUS[0]}"
-	@touch $@
-	@echo -e "Done compiling '$<' into work library '$(S_TB_LIB)'"
-
-# Define a pattern rule to for use at commandline to compile source versions
-tb_%: $(S_TB_LIB)/%
-	@exit 0 # We cannot have an empty pattern rule in a makefile
-
-# Define a pattern rule to automatically create the work library for a full design mapped compile
-$(M_TB_LIB):
-	@echo -e "Creating work library: $@"
-	@rm -rf $@
-	@$(LIB_CREATE) $@
-
-# Define a pattern rule to automatically compile updated mapped design files for a full mapped design
-$(M_TB_LIB)/%: mapped/%.v | $(M_TB_LIB)
-	@echo -e "Compiling '$<' into work library '$(M_TB_LIB)'"
-	@$(COMPILE) -work $(M_TB_LIB) $< | tee $*.mcomp ; exit "$${PIPESTATUS[0]}"
-	@touch $@
-	@echo -e "Done compiling '$<' into work library '$(M_TB_LIB)'"
-
-# Define a pattern rule to automatically compile updated test bench files for a full mapped design
-$(M_TB_LIB)/tb_%: test_benches/tb_%.sv | $(M_TB_LIB)
-	@echo -e "Compiling '$<' into work library '$(M_TB_LIB)'"
-	@$(COMPILE) -work $(M_TB_LIB) $< | tee $*.mcomp; exit "$${PIPESTATUS[0]}"
-	@touch $@
-	@echo -e "Done compiling '$<' into work library '$(M_TB_LIB)'"
-
-# Define a pattern rule to for use at commandline to compile mapped versions
-mapped_%: $(M_TB_LIB)/%
-	@exit 0 # We cannot have an empty pattern rule in a makefile
-
-# Define a pattern rule to for use at commandline to compile testbenches
-mapped_tb_%: $(M_TB_LIB)/tb_%
-	@exit 0 # We cannot have an empty pattern rule in a makefile
-
 ##############################################################################
 # General Simulation Targets
 ##############################################################################
@@ -260,7 +221,8 @@ define CONSOLE_SIM_CMDS
 endef
 
 # This rule defines how to simulate the source form of the full design
-sim_full_source: $(addprefix $(S_WORK_LIB)/, $(notdir $(basename $(TOP_LEVEL_FILE) $(TEST_BENCH) $(TB_HELPER_FILES) $(COMPONENT_FILES))))
+sim_full_source: $(addprefix $(S_WORK_LIB)/, \
+		$(notdir $(basename $(TOP_LEVEL_FILE) $(TEST_BENCH) $(TB_HELPER_FILES) $(COMPONENT_FILES))))
 	@echo -e "Simulating Source Design"
 # Uncomment below if you want to just run the simulation as a console command
 # using the commands listed in the CONSOLE_SIM_CMDS definition above instead of
@@ -278,7 +240,8 @@ sim_full_source: $(addprefix $(S_WORK_LIB)/, $(notdir $(basename $(TOP_LEVEL_FIL
 	@echo -e "Done simulating the source design\n\n"
 
 # This rule defines how to simulate the mapped form of the full design
-sim_full_mapped: $(addprefix $(M_WORK_LIB)/, $(notdir $(basename $(TOP_LEVEL_FILE) $(TEST_BENCH) $(TB_HELPER_FILES))))
+sim_full_mapped: $(addprefix $(M_WORK_LIB)/, \
+		$(notdir $(basename $(TOP_LEVEL_FILE) $(TEST_BENCH) $(TB_HELPER_FILES))))
 	@echo -e "Simulating Mapped Design"
 # Uncomment below if you want to just run the simulation as a console command
 # using the commands listed in the CONSOLE_SIM_CMDS definition above instead of
@@ -306,7 +269,7 @@ sim_%_mapped: $(M_WORK_LIB)/%
 	@cp -f transcript $*.mtran
 
 # Define a pattern rule for simulating the source version of individual files	with a testbench
-tbsim_%_source: $(S_WORK_LIB)/% $(S_TB_LIB)/tb_%
+tbsim_%_source: $(S_WORK_LIB)/% $(S_WORK_LIB)/tb_%
 	@$(SIMULATE) -i -t ps $(dir $<).tb_$*
 	@cp -f transcript $*.stran
 
@@ -343,15 +306,18 @@ MOD_NAME := $(basename $(MAIN_FILE))
 # A customized make target for the top level file for complex designs
 # Note: The CLOCK_NAME variable override below will need to be set to the actual
 # clock signal name for sequential/clocked designs.
-# Also have to specify to run with the c shell to force it to use the course config (.cshrc) and call course scripts
+# Also have to specify to run with the c shell to force it to use the course config (.cshrc)
 mapped/$(TOP_MODULE).v: SHELL := /usr/bin/tcsh
-$(addsuffix .v, $(addprefix mapped/, $(TOP_MODULE))): mapped/%.v : source/%.sv $(addprefix source/,$(COMPONENT_FILES))
+$(addsuffix .v, $(addprefix mapped/, $(TOP_MODULE))): mapped/%.v : source/%.sv \
+		$(addprefix source/,$(COMPONENT_FILES))
 	@echo "Synthesizing design: $@\n"
-	@$(MAKE) --no-print-directory syn_mapped MAIN_FILE='$(notdir $<)' DEP_SUB_FILES='$(COMPONENT_FILES)' CLOCK_NAME='$(CLOCK_NAME)' CLOCK_PERIOD='$(CLOCK_PERIOD)' > $(notdir $(basename $@)).log
+	@$(MAKE) --no-print-directory syn_mapped MAIN_FILE='$(notdir $<)' DEP_SUB_FILES='$(COMPONENT_FILES)' \
+		CLOCK_NAME='$(CLOCK_NAME)' CLOCK_PERIOD='$(CLOCK_PERIOD)' > $(notdir $(basename $@)).log
 	@echo "Synthesis run attempt for $@ complete"
 	@echo "Checking synthesis attempt for errors"
 	@syschk -w $(notdir $(basename $@))
-	@echo "\nCheck for synthesis attempt errors complete, open $(notdir $(basename $@)).log for details if errors were found"
+	@echo "\nCheck for synthesis attempt errors complete, open " \
+		"$(notdir $(basename $@)).log for details if errors were found"
 	@echo "\nRemember to check $(TOP_MODULE).log for latches and timing arcs"
 	@echo "Synthesis run complete for design: $@\n\n"
 
@@ -361,11 +327,12 @@ $(addsuffix .v, $(addprefix mapped/, $(TOP_MODULE))): mapped/%.v : source/%.sv $
 # Additionally it will include any specified dependant submodule source files in the target's
 # dependencies and thus will resynthesize if any of them are newer as well.
 # It will pass on any of the related variables values if they were overwritten at runtime.
-# Also have to specify to run with the c shell to force it to use the course config (.cshrc) and call course scripts
+# Also have to specify to run with the c shell to force it to use the course config (.cshrc)
 mapped/%.v: SHELL := /usr/bin/tcsh
 mapped/%.v: source/%.sv $(addprefix source/,$(DEP_SUB_FILES))
 	@echo "Synthesizing and Compiling design: $@\n"
-	@$(MAKE) --no-print-directory syn_mapped MAIN_FILE='$*.sv' DEP_SUB_FILES='$(DEP_SUB_FILES)' CLOCK_NAME='$(CLOCK_NAME)' CLOCK_PERIOD='$(CLOCK_PERIOD)' > $*.log
+	@$(MAKE) --no-print-directory syn_mapped MAIN_FILE='$*.sv' DEP_SUB_FILES='$(DEP_SUB_FILES)' \
+		CLOCK_NAME='$(CLOCK_NAME)' CLOCK_PERIOD='$(CLOCK_PERIOD)' > $*.log
 	@echo "Synthesis run attempt for $@ complete"
 	@echo "Checking synthesis attempt for errors (errors will be printed if found)"
 	@syschk -w $*
@@ -391,7 +358,8 @@ uniquify
 # set_max_delay <delay> -from "<input>" -to "<output>"
 # set_max_area <area>
 # set_max_total_power <power> mW
-$(if $(and $(CLOCK_NAME), $(CLOCK_PERIOD)), create_clock "$(CLOCK_NAME)" -name "$(CLOCK_NAME)" -period $(CLOCK_PERIOD))
+$(if $(and $(CLOCK_NAME), $(CLOCK_PERIOD)), \
+	create_clock "$(CLOCK_NAME)" -name "$(CLOCK_NAME)" -period $(CLOCK_PERIOD))
 
 # Step 3: Compile the design
 compile -map_effort medium
