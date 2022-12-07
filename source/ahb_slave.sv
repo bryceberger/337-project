@@ -40,9 +40,6 @@ module ahb_slave (
     output var clear_data_buffer
 );
 
-    clocking ce @(posedge clk, negedge n_rst);
-    endclocking
-
     // address mapping
     // 0x0: 4 R/W data buffer
     // 0x4: 2 R   status register
@@ -52,14 +49,29 @@ module ahb_slave (
     // 0xD: 1 R/W flush buffer control 
     // 0xE: reserved
     // 0xF: reserved
-    logic [7:0] mem   [15:0];
+    logic [7:0] mem    [17:0];
     logic [1:0] size;
     logic       write;
     logic [3:0] addr;
+    logic       enable;
+
+    assign enable            = hsel && htrans != IDLE;
+    assign d_mode            = tx_transfer_active;
+    assign tx_packet         = mem['hc][2:0] - 1;
+    assign tx_start          = |mem['hc];
+    assign tx_data           = hwdata;
+    assign clear_data_buffer = |mem['hd];
+
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) get_rx_data <= 0;
+        else get_rx_data <= !hwrite && addr == 0 ? hsize + 1 : 0;
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) store_tx_data <= 0;
+        else store_tx_data <= hwrite && addr == 0 ? hsize + 1 : 0;
 
     /* svlint off sequential_block_in_always_ff */  // only assigning to mem
-    always_ff @(ce)
-        if (!n_rst) mem <= '{16{0}};
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) mem <= '{18{0}};
         else begin
             mem['h4] <= {
                 4'h0,
@@ -72,14 +84,15 @@ module ahb_slave (
             mem['h6] <= {7'h0, rx_error};
             mem['h7] <= {7'h0, tx_error};
             mem['h8] <= buffer_occupancy;
-            mem['hd] <= buffer_occupancy != 0 ? mem['hd] : 0;
+
+            if (buffer_occupancy == 0) mem['hd] <= 0;
 
             // give tx_transfer_active a clock cycle to go high
             if (mem['hc][7] && !tx_transfer_active) mem['hc] <= 0;
             else if (mem['hc]) mem['hc] <= {1'b1, mem['hc][6:0]};
 
             // write if necessary
-            if (hsel && write && !hresp && addr != 0) begin
+            if (enable && write && !hresp && addr != 0) begin
                 mem[addr] <= hwdata[7:0];
                 if (size != 0) mem[addr+1] <= hwdata[15:8];
                 else if (size > 1) {mem[addr+3], mem[addr+2]} <= hwdata[31:16];
@@ -87,25 +100,37 @@ module ahb_slave (
         end
     /* svlint on sequential_block_in_always_ff */
 
-    always_comb
-        casez ({
-            hwrite, hsize, haddr
-        })
-            'b?11????: hresp = 1;  // 8 byte accesses not supported
-            'b?0?111?: hresp = 1;  // 1 / 2 byte accesses to 0xE, 0xF
-            'b?0?101?: hresp = 1;  // 1 / 2 byte accesses to 0xA, 0xB
-            'b?001001: hresp = 1;  // 1 byte accesses to 0x9
-            'b1??01??: hresp = 1;  // write to 0x4 -- 0x7
-            'b1??10??: hresp = 1;  // write to 0x8 -- 0xB
-            default:   hresp = 0;
-        endcase
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) hresp <= 0;
+        else
+            casez ({
+                enable, hwrite, hsize, haddr
+            })
+                'b0???????: hresp <= 0;
+                'b1?11????: hresp <= 1;  // 8 byte accesses not supported
+                'b1?0?111?: hresp <= 1;  // 1 / 2 byte accesses to 0xE, 0xF
+                'b1?0?101?: hresp <= 1;  // 1 / 2 byte accesses to 0xA, 0xB
+                'b1?001001: hresp <= 1;  // 1 byte accesses to 0x9
+                'b11??01??: hresp <= 1;  // write to 0x4 -- 0x7
+                'b11??10??: hresp <= 1;  // write to 0x8 -- 0xB
+                default: hresp <= 0;
+            endcase
 
     // on err, hold ready low until receive acknowledge
-    assign hready = !(hresp && htrans != IDLE);
+    // make an actual error signal that is sure to stay high for a clock cycle
+    // because if the bus is always in idle mode, err goes low after next rising
+    // which means the write still goes through
+    /*
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) hready <= 0;
+        else hready <= !(hresp && htrans != IDLE);
+	*/
+    assign hready = !(hresp && enable);
 
     // address decoding
-    always_ff @(ce)
+    always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) addr <= 0;
+        else if (!enable) addr <= 0;
         else if (haddr < 4) addr <= 0;
         else
             case (hsize)
@@ -114,7 +139,7 @@ module ahb_slave (
                 default: addr <= {haddr[3:2], 2'b0};
             endcase
 
-    always_ff @(ce)
+    always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) {size, write} <= 0;
         else {size, write} <= {hsize, hwrite};
 
@@ -125,8 +150,9 @@ module ahb_slave (
     always_comb
         if (addr == 0) read_source = rx_data;
         else read_source = {mem[addr+3], mem[addr+2], mem[addr+1], mem[addr]};
-    always_ff @(ce)
+    always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) hrdata <= 0;
+        else if (!enable) hrdata <= 0;
         else if (hsel && !hwrite)
             case (hsize)
                 'b00:    hrdata <= {24'b0, read_source[7:0]};
