@@ -1,7 +1,7 @@
 `default_nettype none
 `include "source/states.sv"
 
-module ahb_lite_slave (
+module ahb_slave (
     // general inputs
     input var clk,
     input var n_rst,
@@ -79,7 +79,7 @@ module ahb_lite_slave (
             else if (mem['hc]) mem['hc] <= {1'b1, mem['hc][6:0]};
 
             // write if necessary
-            if (hsel && write && addr != 0) begin
+            if (hsel && write && !hresp && addr != 0) begin
                 mem[addr] <= hwdata[7:0];
                 if (size != 0) mem[addr+1] <= hwdata[15:8];
                 else if (size > 1) {mem[addr+3], mem[addr+2]} <= hwdata[31:16];
