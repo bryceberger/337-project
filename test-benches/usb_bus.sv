@@ -1,4 +1,6 @@
-class tb_usb_transmit;
+`default_nettype none
+
+class usb_bus;
     typedef union tagged {
         byte usb_data_byte;
         struct {
@@ -99,7 +101,7 @@ class tb_usb_transmit;
 
     task enqueue_usb_token(
         input bit t_type, // OUT = 0, IN = 1
-        input bit [6:0] address, input bit [3:0] endpoint
+        input bit [6:0] address = 0, input bit [3:0] endpoint = 0
     );
         static byte bytes [2];
 
@@ -119,13 +121,13 @@ class tb_usb_transmit;
         enqueue_usb_packet(pid, 2, bytes);
     endtask
 
-    task enqueue_usb_data(input bit d_type, input int n_bytes, input byte data[]);
+    task enqueue_usb_data(input bit d_type = 0, input byte data[]);
         automatic bit [3:0] pid = { d_type, 3'b011 };
 
         // compute CRC
         automatic bit [15:0] crc = 16'hffff;
         logic xr;
-        for (int i = 0; i < n_bytes; i++) begin
+        for (int i = 0; i < data.size(); i++) begin
             for (int j = 0; j < 8; j++) begin
                 xr = data[i][j] ^ crc[15];
                 crc = {crc[14] ^ xr, crc[13:2], crc[1] ^ xr, crc[0], xr};
@@ -133,7 +135,7 @@ class tb_usb_transmit;
         end
 
         enqueue_usb_packet(
-            pid, n_bytes + 2,
+            pid, data.size() + 2,
             { data, { << {~crc[15:8]} }, { << {~crc[7:0]} } }
         );
     endtask

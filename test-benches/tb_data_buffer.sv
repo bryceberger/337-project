@@ -28,16 +28,16 @@ module tb_data_buffer ();
     logic [6:0] buffer_occ;
     // rx inputs
     logic [1:0] get_rx_data;
-    logic store_rx_data;
-    logic [7:0] rx_data_in;
+    logic store_rx_packet_data;
+    logic [7:0] rx_packet_data;
     // rx outputs
-    logic [31:0] rx_data_out;
+    logic [31:0] rx_data;
     // tx inputs
-    logic get_tx_data;
+    logic get_tx_packet_data;
     logic [1:0] store_tx_data;
-    logic [31:0] tx_data_in;
+    logic [31:0] tx_data;
     // tx outputs
-    logic [7:0] tx_data_out;
+    logic [7:0] tx_packet_data;
 
     data_buffer DUT (.*);
 
@@ -54,43 +54,43 @@ module tb_data_buffer ();
     task init_inputs();
         {
             flush, clear,
-            get_rx_data, store_rx_data, rx_data_in,
-            get_tx_data, store_tx_data, tx_data_in
+            get_rx_data, store_rx_packet_data, rx_packet_data,
+            get_tx_packet_data, store_tx_data, tx_data
         } = '0;
     endtask
 
     task fill_usb(input byte data[]);
         if (data.size() == 0) return;
         @(negedge clk);
-        store_rx_data = 1;
+        store_rx_packet_data = 1;
         for (int i = 0; i < data.size(); i++) begin
-            rx_data_in = data[i];
+            rx_packet_data = data[i];
             @(posedge clk);
         end
         @(negedge clk);
-        store_rx_data = 0;
-        rx_data_in    = 0;
+        store_rx_packet_data = 0;
+        rx_packet_data       = 0;
     endtask
 
     task drain_usb(input byte expected_data[]);
         if (expected_data.size() == 0) return;
         @(negedge clk);
-        get_tx_data = 1;
+        get_tx_packet_data = 1;
         for (int i = 0; i < expected_data.size(); i++) begin
-            assert (expected_data[i] == tx_data_out)
+            assert (expected_data[i] == tx_packet_data)
             else
                 $error(
-                    "Incorrect tx_data_out response at time %t (expected 0x%02x, got 0x%02x)",
+                    "Incorrect tx_packet_data response at time %t (expected 0x%02x, got 0x%02x)",
                     $time,
                     expected_data[i],
-                    tx_data_out
+                    tx_packet_data
                 );
             if (i == expected_data.size() - 1) break;
             @(posedge clk);
             @(negedge clk);
         end
         @(negedge clk);
-        get_tx_data = 0;
+        get_tx_packet_data = 0;
     endtask
 
     task fill_ahb(input byte data[], input bit [1:0] size = 3);
@@ -106,12 +106,12 @@ module tb_data_buffer ();
         @(negedge clk);
         store_tx_data = size;
         for (int i = 0; i < data.size(); i += shift) begin
-            tx_data_in = {data[i+3], data[i+2], data[i+1], data[i]};
+            tx_data = {data[i+3], data[i+2], data[i+1], data[i]};
             @(posedge clk);
         end
         @(negedge clk);
         store_tx_data = 0;
-        tx_data_in    = 0;
+        tx_data       = 0;
     endtask
 
     task drain_ahb(input byte expected_data[], input bit [1:0] size = 3);
@@ -130,10 +130,10 @@ module tb_data_buffer ();
             assert ({
                 expected_data[i+3], expected_data[i+2],
                 expected_data[i+1], expected_data[i]
-            } == rx_data_out)
+            } == rx_data)
             else
                 $error(
-                    "Incorrect rx_data_out response at time %t (expected 0x%08x, got 0x%08x)",
+                    "Incorrect rx_data response at time %t (expected 0x%08x, got 0x%08x)",
                     $time,
                     {
                         expected_data[i+3],
@@ -141,7 +141,7 @@ module tb_data_buffer ();
                         expected_data[i+1],
                         expected_data[i]
                     },
-                    rx_data_out
+                    rx_data
                 );
             if (i + shift >= expected_data.size()) break;
             @(posedge clk);
@@ -162,22 +162,22 @@ module tb_data_buffer ();
 
     task check_outputs(bit [31:0] expected_data);
         @(negedge clk);
-        assert (rx_data_out[7:0] == tx_data_out)
+        assert (rx_data[7:0] == tx_packet_data)
         else
             $error(
-                "rx_data_out and tx_data_out mismatch at time %t (rx = 0x%02x, tx = 0x%02x)",
+                "rx_data and tx_packet_data mismatch at time %t (rx = 0x%02x, tx = 0x%02x)",
                 $time,
-                rx_data_out[7:0],
-                tx_data_out
+                rx_data[7:0],
+                tx_packet_data
             );
 
-        assert (rx_data_out == expected_data)
+        assert (rx_data == expected_data)
         else
             $error(
-                "Incorrect rx_data_out at time %t (expected 0x%08x, got 0x%08x)",
+                "Incorrect rx_data at time %t (expected 0x%08x, got 0x%08x)",
                 $time,
                 expected_data,
-                rx_data_out
+                rx_data
             );
         @(negedge clk);
     endtask
@@ -215,7 +215,7 @@ module tb_data_buffer ();
         @(negedge clk);
 
         // all outputs should be initialized to 0
-        assert ({buffer_occ, rx_data_out, tx_data_out} == '0);
+        assert ({buffer_occ, rx_data, tx_packet_data} == '0);
 
         // **************************************************
         // Filling
