@@ -381,6 +381,8 @@ begin
     usb_tx.enqueue_usb_data(1'b0, bytes);
     usb_tx.send_usb_packet();
 
+    #(CLK_PERIOD * 10);
+
     // case 4
     reset_dut();
     #(CLK_PERIOD * 10);

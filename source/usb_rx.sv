@@ -47,7 +47,7 @@ module usb_rx (
     logic prev_rdata;
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) prev_rdata <= 1'b1;
-        else prev_rdata <= shift ? rdata : prev_rdata;
+        else prev_rdata <= raw_shift ? rdata : prev_rdata;
 
     // keep track of number of ones on the bus
     logic [2:0] ones, n_ones;
@@ -62,7 +62,7 @@ module usb_rx (
     assign data = rdata == prev_rdata;
 
     // shift register for bytes of data
-    assign skip = ones >= 7;
+    assign skip = ones >= 6;
     logic [7:0] sr;
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) sr <= 8'h00;
@@ -122,8 +122,10 @@ module usb_rx (
             else if (shift) n_state = ERROR;
         end
         else if (EOP) begin
-            if (state == DATA && bit_count == 0)
+            if (state == DATA && bit_count == 0) begin
                 n_state = crc16v ? EOP2 : ERROR;
+                n_data_ready = crc16v;
+            end
             else
                 n_state = ERROR;
         end
