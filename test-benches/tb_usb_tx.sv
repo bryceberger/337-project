@@ -408,10 +408,8 @@ module tb_usb_tx ();
         // Check outputs
         tb_expected_trans_act = 1'b1;
 
-        @(posedge clk);
-        @(posedge clk);
-        @(posedge clk);
-        @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
+        
         check_sync();
         tx_start = 1'b0;
         check_pid(ACK_PID);
@@ -444,10 +442,7 @@ module tb_usb_tx ();
         // Check outputs
         tb_expected_trans_act = 1'b1;
 
-        @(posedge clk);
-        @(posedge clk);
-        @(posedge clk);
-        @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(NAK_PID);
@@ -481,7 +476,7 @@ module tb_usb_tx ();
         tb_expected_trans_act = 1'b1;
         crc                   = 16'hffff;
 
-        for (int i = 0; i < 4; i++) @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
@@ -508,7 +503,7 @@ module tb_usb_tx ();
         // Set input signals
         tx_start         = 1'b1;
         tx_packet        = TX_PACKET_DATA0;
-        buffer_occupancy = 7'd0;
+        buffer_occupancy = 7'd1;
         assert (rng.randomize() == 1);
         tb_data[0]            = rng.data;
         tx_packet_data        = tb_data[0];
@@ -523,7 +518,7 @@ module tb_usb_tx ();
             end
         end
 
-        for (int i = 0; i < 4; i++) @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
@@ -545,7 +540,7 @@ module tb_usb_tx ();
         tx_start = 1'b0;
         tx_packet = 2'd0;
         buffer_occupancy = 7'd0;
-        tb_data = new[1];
+        tb_data = new[32];
         reset_dut();
 
         // Set input signals
@@ -569,7 +564,7 @@ module tb_usb_tx ();
             end
         end
 
-        for (int i = 0; i < 4; i++) @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
@@ -594,7 +589,7 @@ module tb_usb_tx ();
         tx_start = 1'b0;
         tx_packet = 2'd0;
         buffer_occupancy = 7'd0;
-        tb_data = new[1];
+        tb_data = new[64];
         reset_dut();
 
         // Set input signals
@@ -618,7 +613,7 @@ module tb_usb_tx ();
             end
         end
 
-        for (int i = 0; i < 4; i++) @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
@@ -656,7 +651,7 @@ module tb_usb_tx ();
         // Check outputs
         tb_expected_trans_act = 1'b1;
 
-        for (int i = 0; i < 4; i++) @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(STALL_PID);
@@ -694,7 +689,7 @@ module tb_usb_tx ();
             end
         end
 
-        for (int i = 0; i < 4; i++) @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
@@ -748,7 +743,7 @@ module tb_usb_tx ();
             end
         end
 
-        for (int i = 0; i < 4; i++) @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
@@ -802,7 +797,7 @@ module tb_usb_tx ();
             end
         end
 
-        for (int i = 0; i < 4; i++) @(posedge clk);
+        for (int i = 0; i < 8; i++) @(posedge clk);
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
