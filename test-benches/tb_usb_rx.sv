@@ -349,13 +349,16 @@ begin
     usb_tx.enqueue_usb_token(1'b0, 7'h3a, 4'ha);
     usb_tx.send_usb_packet();
 
+    usb_tx.enqueue_usb_token(1'b1, 7'h70, 4'h4);
+    usb_tx.send_usb_packet();
+
     usb_tx.enqueue_usb_data(1'b0, 4, {8'h00, 8'h01, 8'h02, 8'h03});
     usb_tx.send_usb_packet();
 
-    usb_tx.enqueue_usb_handshake(2'd2);
+    usb_tx.enqueue_usb_handshake(2'd0);
     usb_tx.send_usb_packet();
 
-    usb_tx.enqueue_usb_handshake(2'd2);
+    usb_tx.enqueue_usb_handshake(2'd1);
     usb_tx.send_usb_packet(84ns);
 
     usb_tx.enqueue_usb_handshake(2'd2);

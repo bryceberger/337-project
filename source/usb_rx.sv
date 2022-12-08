@@ -8,7 +8,7 @@ module usb_rx (
     output wire rx_transfer_active,
     output wire rx_error,
     // I/O from FIFO
-    output wire flush, output wire store_rx_packet_data,
+    output wire flush, output reg store_rx_packet_data,
     output reg [7:0] rx_packet_data,
     input wire [6:0] buffer_occupancy
 );
@@ -84,17 +84,20 @@ module usb_rx (
     } state, n_state;
 
     bit n_data_ready;
+    bit [2:0] packet, n_packet;
+    bit active, n_active;
 
     // clear count, read sync, read PID
     bit [1:0] sp_state, n_sp_state;
     // TODO
     bit [1:0] r_state, n_r_state;
 
-    logic tc, token_pid, data_pid, handshake_pid;
-    assign tc = sr[3:2] != 2'b01;
-    assign token_pid = sr[1:0] == 2'b01 && tc;
+    logic token_pid, data_pid, ack_pid, nack_pid, stall_pid;
+    assign token_pid = sr[2:0] == 2'b001;
     assign data_pid = sr[2:0] == 3'b011;
-    assign handshake_pid = sr[1:0] == 2'b10 && tc;
+    assign ack_pid =   sr[3:0] == 4'b0010;
+    assign nack_pid =  sr[3:0] == 4'b1010;
+    assign stall_pid = sr[3:0] == 4'b1110;
 
     logic crc5v, crc16v, clear;
     crc5 CRC5 (.valid(crc5v), .crc(), .*);
@@ -107,6 +110,8 @@ module usb_rx (
         n_data_ready = state != READ_SP ? rx_data_ready : 0;
         n_sp_state = state == READ_SP || state == EOP2 ? sp_state : 0;
         n_r_state = state == TOKEN || state == DATA ? r_state : 0;
+        n_packet = state == IDLE ? 3'b100 : packet;
+        n_active = active;
         if (state == EOP1 || state == EOP2) begin
             if (EOP && state == EOP1)
                 n_state = EOP2;
@@ -136,11 +141,21 @@ module usb_rx (
                 2: if (bit_count == 0)
                     if (sr[3:0] != ~sr[7:4])
                         n_state = ERROR;
-                    else if (token_pid)
+                    else if (token_pid) begin
                         n_state = TOKEN;
+                        n_packet = {0, sr[3]};
+                    end
                     else if (data_pid)
                         n_state = DATA;
-                    else if (handshake_pid)
+                    else if (ack_pid) begin
+                        n_state = EOP1;
+                        n_packet = 2;
+                    end
+                    else if (nack_pid) begin
+                        n_state = EOP1;
+                        n_packet = 3;
+                    end
+                    else if (stall_pid)
                         n_state = EOP1;
                     else
                         n_state = ERROR;
@@ -166,15 +181,19 @@ module usb_rx (
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst)
             {
-                state, rx_data_ready, sp_state, r_state
+                state, sp_state, r_state,
+                rx_data_ready, packet, active
             } <= {
-                IDLE, 1'b0, 2'b0, 2'b0
+                IDLE, 2'b0, 2'b0,
+                1'b0, 3'b000, 1'b1
             };
         else
             {
-                state, rx_data_ready, sp_state, r_state
+                state, sp_state, r_state,
+                rx_data_ready, packet, active
             } <= {
-                n_state, n_data_ready, n_sp_state, n_r_state
+                n_state, n_sp_state, n_r_state,
+                n_data_ready, n_packet, n_active
             };
 
     assign rx_error = state == ERROR;
@@ -186,15 +205,28 @@ module usb_rx (
 
     bit [1:0] delay_amount, d_delay_amount, n_delay_amount;
     assign d_delay_amount = push_data ? delay_amount - 1 : delay_amount;
-    assign n_delay_amount = delay_amount == 0 ? 0 : d_delay_amount;
+    assign n_delay_amount = state == IDLE
+        ? 2'd2
+        : delay_amount == 0 ? 0 : d_delay_amount;
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) delay_amount <= 2'd2;
         else delay_amount <= n_delay_amount;
 
-    /* byte bytes [3]; */
-    /* always_ff @(posedge clk, negedge n_rst) */
+    byte bytes [3];
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) bytes <= {0, 0, 0};
+        else if (push_data)
+            bytes <= {sr, bytes[0], bytes[1]};
+        else
+            bytes <= bytes;
 
-    assign rx_packet = '0;
-    assign store_rx_packet_data = '0;
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) store_rx_packet_data <= 0;
+        else store_rx_packet_data <= push_data && delay_amount == 0;
+
+    assign rx_packet_data = bytes[2];
+
+    // OUT, IN, ACK, NACK
+    assign rx_packet = {rx_error || !active, 2'b0} | packet;
 
 endmodule
