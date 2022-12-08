@@ -110,7 +110,7 @@ module usb_rx (
         n_data_ready = state != READ_SP ? rx_data_ready : 0;
         n_sp_state = state == READ_SP || state == EOP2 ? sp_state : 0;
         n_r_state = state == TOKEN || state == DATA ? r_state : 0;
-        n_packet = state == IDLE ? 3'b100 : packet;
+        n_packet = state == READ_SP ? 3'b100 : packet;
         n_active = active;
         if (state == EOP1 || state == EOP2) begin
             if (EOP && state == EOP1)
@@ -128,7 +128,7 @@ module usb_rx (
                 n_state = ERROR;
         end
         else if (state == IDLE || state == ERROR) begin
-            if (!rdata) n_state = READ_SP;
+            if (!rdata && !eop) n_state = READ_SP;
         end
         else if (state == READ_SP)
             case (sp_state)

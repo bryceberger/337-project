@@ -1,15 +1,15 @@
 `default_nettype none
 
-class usb_bus;
-    typedef union tagged {
-        byte usb_data_byte;
-        struct {
-            byte eop;
-            byte data;
-            byte num_bits;
-        } usb_data_eop;
-    } USB_data;
+typedef union tagged {
+    byte usb_data_byte;
+    struct {
+        byte eop;
+        byte data;
+        byte num_bits;
+    } usb_data_eop;
+} USB_data;
 
+class usb_bus;
     USB_data data_queue[$];
     static logic dp = 1'b1, dm = 1'b0;
 

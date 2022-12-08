@@ -19,12 +19,10 @@ include /home/ecegrid/a/ece337/Course_Prod/course_make_vars
 #
 # **** list all files on the same line. DO NOT USE the "\" escape character to extend across
 #      multiple lines. The grading script expects all file names on one line.
-COMPONENT_FILES	:= ahb_slave data_buffer states usb_rx usb_tx crc crc5 crc16
+COMPONENT_FILES	:= crc crc5 crc16
 
 # Specify the name of the top level file (do not include the source folder in the name)
-# NOTE: YOU WILL NEED TO SET THIS VARIABLE'S VALUE WHEN WORKING WITH HEIRARCHICAL DESIGNS
-# AND THE AUTOMATED GRADING SYSTEM
-TOP_LEVEL_FILE	:= ahb_usb
+TOP_LEVEL_FILE	:= usb_rx
 
 # Specify the filepath of the test bench you want to use (ie. tb_top_level.sv)
 # (do not include the source folder in the name)
@@ -229,7 +227,7 @@ sim_full_source: \
 # Uncomment below if you want to just run the simulation as a console command
 # using the commands listed in the CONSOLE_SIM_CMDS definition above instead of
 # .do file and have the transcript contents to be saved to a file
-	#@$(SIMULATE) -c -t ps -do $(CONSOLE_SIM_CMDS) $(S_WORK_LIB).$(TB_MODULE) > source.tran
+#	@$(SIMULATE) -c -t ps -do $(CONSOLE_SIM_CMDS) $(S_WORK_LIB).$(TB_MODULE) > source.tran
 
 # Uncomment below if you want run the simulation the normal way and have it
 # run the specified .do file
@@ -261,11 +259,6 @@ sim_full_mapped: \
 	@$(SIMULATE) -i -t ps $(M_WORK_LIB).$(TB_MODULE) -do runme.do
 	@cp -f transcript $(basename $(TOP_LEVEL_FILE)).mtran
 	@echo -e "Done simulating the mapped design\n\n"
-
-# Define a pattern rule for simulating the source version of individual files	without a testbench
-tbsim_%_source_save: $(S_WORK_LIB)/%
-	@$(SIMULATE) -c -t ps -do $(CONSOLE_SIM_CMDS) $(dir $<).tb_$* > source.tran
-	@cp -f transcript $*.stran
 
 # Define a pattern rule for simulating the source version of individual files	without a testbench
 sim_%_source: $(S_WORK_LIB)/%

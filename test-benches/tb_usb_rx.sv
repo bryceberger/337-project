@@ -289,6 +289,9 @@ usb_bus usb_tx = new;
 assign dp = usb_tx.dp;
 assign dm = usb_tx.dm;
 
+USB_data udata;
+byte bytes [64];
+
 // Test Bench Main Process
 initial
 begin
@@ -343,7 +346,6 @@ begin
     test_case = "Initial Test";
 
     reset_dut();
-
     #(CLK_PERIOD * 10);
 
     usb_tx.enqueue_usb_token(1'b0, 7'h3a, 4'ha);
@@ -364,7 +366,33 @@ begin
     usb_tx.enqueue_usb_handshake(2'd2);
     usb_tx.send_usb_packet(82ns);
 
-    // TODO write more test cases
+    // case 3
+    reset_dut();
+    #(CLK_PERIOD * 10);
+
+    usb_tx.enqueue_usb_data(1'b0, {});
+    usb_tx.send_usb_packet();
+
+    #(CLK_PERIOD * 20);
+
+    for (int i = 0; i < 64; i++)
+        bytes[i] = 200 - 2*i;
+
+    usb_tx.enqueue_usb_data(1'b0, bytes);
+    usb_tx.send_usb_packet();
+
+    // case 4
+    reset_dut();
+    #(CLK_PERIOD * 10);
+
+    usb_tx.enqueue_usb_data(1'b0, {8'h00, 8'h01, 8'h02, 8'h03});
+    usb_tx.remove_usb_byte();
+    usb_tx.remove_usb_byte();
+    udata = tagged usb_data_byte (8'b01011111);
+    usb_tx.enqueue_usb_byte(udata);
+    udata = tagged usb_data_eop ('{8'h03, 8'h00, 3});
+    usb_tx.enqueue_usb_byte(udata);
+    usb_tx.send_usb_packet();
 
 end
 
