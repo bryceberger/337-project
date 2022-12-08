@@ -12,4 +12,11 @@ module usb_rx (
     output wire [7:0] rx_packet_data,
     input wire [6:0] buffer_occupancy
 );
+    assign rx_packet = '0;
+    assign rx_data_ready = '0;
+    assign rx_transfer_active = '0;
+    assign rx_error = '0;
+    assign flush = '0;
+    assign store_rx_packet_data = '0;
+    assign rx_packet_data = '0;
 endmodule

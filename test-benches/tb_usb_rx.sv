@@ -161,7 +161,7 @@ task send_usb_bit(input time period, input bit b, input bit eop = 1'b0);
     end
 endtask
 
-task send_usb_packet(input time period = (250/3) * 1ns);
+task send_usb_packet(input time period = (250/3) * 1ns); // validate from 82 to 84 ns
     USB_data usb_data;
     automatic bit bus_state = 1'b1;
     automatic int ones = 0;
@@ -253,8 +253,184 @@ always begin: CLK_GEN
     #(CLK_PERIOD / 2.0);
 end
 
+sequence High; // USB idles high
+    dp == 1'b1 && dm == 1'b0;
+endsequence
+sequence Low;
+    dp == 1'b0 && dm == 1'b1;
+endsequence
+sequence EOP;
+    dp == dm;
+endsequence
+sequence nEOP;
+    dp != dm;
+endsequence
+
+sequence Idle;
+    ($stable(dp) && $stable(dm)) [*53:57];
+endsequence
+
+property TransferActive;
+    @(posedge clk) disable iff (!n_rst)
+    rx_transfer_active |-> (
+        (nEOP ##1 rx_transfer_active == 1'b1)
+        or
+        (EOP ##[7:12] rx_transfer_active == 1'b0)
+        or
+        (Idle ##1 rx_transfer_active == 1'b0)
+    )
+endproperty
+
+property TransferInactive;
+    @(posedge clk) disable iff (!n_rst)
+    rx_transfer_active != 1'b1 |-> (
+        ((High or EOP) ##1 rx_transfer_active == 1'b0)
+        or
+        (Low ##1 (
+            (##[0:3] rx_transfer_active == 1'b1)
+            and
+            (##[0:3] flush == 1'b1 ##[1:2] flush == 1'b0)
+        ))
+    )
+endproperty
+
+sequence Sync;
+    $fell(dp) && $rose(dm)
+    ##0 (Low [*8:10] ##1 High [*8:10]) [*3] // 6 zeros
+    ##1 Low [*16:20]; // 01
+endsequence
+
+sequence TokenPID;
+    Low [*8:10]                 // 1
+    ##1 High [*8:10]            // 0
+    ##1 (
+        (
+            Low [*8:10]         // 0
+            ##1 High [*8:10]    // 0
+            ##1 Low [*32:40]    // 0111
+        ) or (
+            Low [*16:20]        // 01
+            ##1 High [*24:30]   // 011
+            ##1 Low [*8:10]     // 0
+        )
+    );
+endsequence
+
+sequence DataPID;
+    Low [*16:20]                // 11
+    ##1 High [*8:10]            // 0
+    ##1 (
+        (
+            Low [*8:10]         // 0
+            ##1 High [*8:10]    // 0
+            ##1 Low [*24:30]    // 011
+        ) or (
+            High [*8:10]        // 1
+            ##1 Low [*8:10]     // 0
+            ##1 High [*16:20]   // 01
+        )
+    );
+endsequence
+
+sequence HandshakePID;
+    High [*16:20]               // 01
+    ##1 (
+        ( // ACK
+            Low [*8:10]         // 0
+            ##1 High [*16:20]   // 01
+            ##1 Low [*24:30]    // 011
+        ) or ( // NAK
+            Low [*24:30]        // 011
+            ##1 High [*16:20]   // 01
+            ##1 Low [*8:10]     // 0
+        ) or ( // STALL
+            High [*24:30]       // 111
+            ##1 Low [*8:10]     // 0
+            ##1 High [*8:10]    // 0
+            ##1 Low [*8:10]     // 0
+        )
+    );
+endsequence
+
+property BeginPacket;
+    @(posedge clk) disable iff (!n_rst)
+    (!rx_transfer_active and Low) |-> (
+        (Sync ##1 ( // good sync
+            (TokenPID ##1 ( // token
+                (Low [*8:10] or High [*8:10]) [*16] // 16 data bits
+                ##[1:4] EOP // then EOP
+                // TODO assertions if this happens
+            ))
+            or
+            (DataPID ##1 (
+                (
+                    (Low [*8:10] or High [*8:10]) [*8] // 8 bits
+                ) [*0:64] // 0-64 bytes
+                ##[1:4] EOP // then EOP
+                // TODO assertions if this happens
+            ))
+            or
+            (HandshakePID ##1 ##[0:3] EOP) // handshake; immediate EOP
+        ))
+        or
+        (
+            (Sync |=> ( // good sync
+                (not (TokenPID or DataPID or HandshakePID)) // bad PID
+                and
+                (##[64:80] rx_error) // RX error
+            ))
+            and
+            (not Sync |=> ##[64:80] rx_error) // bad sync -> RX error
+        )
+    )
+endproperty
+
+property HoldError;
+    @(posedge clk) disable iff (!n_rst)
+    !rx_transfer_active |=> $stable(rx_error)
+endproperty
+
+property TransferValid(bit valid);
+    @(posedge clk) disable iff (!n_rst)
+    rx_transfer_active && valid |=> !rx_error
+endproperty
+
+property TransferEndError(bit valid);
+    @(posedge clk) disable iff (!n_rst)
+    !valid |=> ##[0:3] rx_error
+endproperty
+
+checker USBModel();
+    static int ones = 0;
+    bit silent_bus, is_valid;
+
+    always_ff @(posedge clk)
+        ones <= $stable(dp) && $stable(dm) ? ones + 1 : 0;
+
+    // done:
+    assert property (TransferActive);
+    /* assert property (TransferInactive); */
+    assert property (HoldError);
+    
+    // not done:
+    assert property (TransferValid(is_valid));
+    assert property (TransferEndError(is_valid));
+    // TODO add to is_valid: invalid sync, bad PID, bad CRC, and bad EOP (sequential!)
+    // TODO validate store, rx_packet, and rx_data_ready (all pretty similar, first need validation)
+    
+    assert property (BeginPacket);
+
+    always_comb begin
+        silent_bus = ones >= 55;
+        /* is_valid = rx_transfer_active && silent_bus; */
+        is_valid = 1'b1;
+    end
+endchecker
+
 // DUT Port Map
 usb_rx DUT (.*);
+
+USBModel usbm();
 
 // Test Bench Main Process
 initial
@@ -306,12 +482,14 @@ begin
     check_outputs("after reset was released");
 
     // **************************************************
-    // Test Case 2: Power-on Reset of DUT
+    // Test Case 2:
     // **************************************************
     test_num = test_num + 1;
-    test_case = "Power-on Reset of DUT";
+    test_case = "Initial Test";
 
     reset_dut();
+
+    #(CLK_PERIOD * 10);
 
     enqueue_usb_token(1'b0, 7'h3a, 4'ha);
     send_usb_packet();
@@ -319,8 +497,14 @@ begin
     enqueue_usb_data(1'b0, 4, {8'h00, 8'h01, 8'h02, 8'h03});
     send_usb_packet();
 
-    enqueue_usb_handshake(2'd0);
+    enqueue_usb_handshake(2'd2);
     send_usb_packet();
+
+    enqueue_usb_handshake(2'd2);
+    send_usb_packet(84ns);
+
+    enqueue_usb_handshake(2'd2);
+    send_usb_packet(82ns);
 
     // TODO write more test cases
 
