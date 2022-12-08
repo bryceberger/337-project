@@ -76,11 +76,11 @@ module usb_tx (
 
     flex_pts_sr #(
         .NUM_BITS (16),
-        .SHIFT_MSB(1'b0)  // Make sure endianness is correct
+        .SHIFT_MSB(1'b0)
     ) CRC_SHIFT_REGISTER (
         .*,
         .shift_enable(shiftEn),
-        .load_enable (state == crc1),  // May need to be delayed 1 clock cycle
+        .load_enable (nxt_state == crc1),  // May need to be delayed 1 clock cycle
         .parallel_in (crc_output),
         .serial_out  (crcBit)
     );
