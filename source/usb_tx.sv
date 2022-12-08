@@ -20,6 +20,12 @@ module usb_tx
     localparam [1:0] TX_PACKET_NAK = 2'd2;
     localparam [1:0] TX_PACKET_STALL = 2'd3;
 
+    // Clock Divider Variables
+    reg shiftEn;
+    reg [3:0] clockCnt;
+    wire beginBitPeriod;
+    assign beginBitPeriod = (clockCnt == 1'b1);
+
     // Control FSM Variables
     localparam [2:0]
         idle = 4'd0,
@@ -33,18 +39,11 @@ module usb_tx
     reg [2:0] state, nxt_state;
     reg syncEn, pidEn, dataEn, crcEn, eofEn; // May want to just use the current state itself rather than these enable signals
 
-    // Clock Divider Variables
-    reg shiftEn;
-    localparam [1:0]
-        firstCycle = 2'd0,
-        secondCycle = 2'd1,
-        thirdCycle = 2'd2;
-    reg [1:0] cycleState, nxt_cycleState;
-    reg [3:0] rollover;
-
     // Bit Counter Variables
-    reg endByte;
+    reg endByte, prev_syncEn;
     reg [2:0] bitNum, nxt_bitNum;
+    wire beginTransmit;
+    assign beginTransmit = (prev_syncEn == 1'b0) && (syncEn == 1'b1);
 
     // CRC-16 Variables
     reg crcBit; // Output by a pts shift register filled with CRC subcircuit
@@ -57,7 +56,7 @@ module usb_tx
     reg nxtBit;
 
     // Encoder Variables
-    reg nxt_Dplus_Out, nxt_Dminus_Out;
+    reg prev_Dplus_Out, prev_Dminus_Out;
 
     // Clock Divider
     flex_counter #(
@@ -65,31 +64,13 @@ module usb_tx
     )
     CYCLE_COUNTER (
         .clk(clk),
-        .n_rst(clk),
-        .clear(1'b0),
+        .n_rst(n_rst),
+        .clear(beginTransmit),
         .count_enable(1'b1),
-        .rollover_val(rollover),
+        .count_out(clockCnt),
+        .rollover_val(4'd8),
         .rollover_flag(shiftEn)
     );
-
-    always_comb begin
-        if (shiftEn == 1'b1) begin
-            case(cycleState)
-                firstCycle: nxt_cycleState = secondCycle;
-                secondCycle: nxt_cycleState = thirdCycle;
-                thirdCycle: nxt_cycleState = firstCycle;
-            endcase
-        end
-
-        case(cycleState)
-            firstCycle, secondCycle: rollover = 3'd8;
-            thirdCycle: rollover = 3'd9;
-            default: rollover = 3'd8;
-        endcase
-    end
-
-    // CRC-16
-    //TODO
 
     // Control FSM
     always_ff @(negedge n_rst, posedge clk) begin
@@ -125,10 +106,10 @@ module usb_tx
                 if (endByte == 1'b1) nxt_state = eof1;
             end
             eof1: begin
-                nxt_state = eof2;
+                if (shiftEn == 1'b1) nxt_state = eof2;
             end
             eof2: begin
-                nxt_state = idle;
+                if (shiftEn == 1'b1) nxt_state = idle;
             end
         endcase
     end
@@ -179,9 +160,11 @@ module usb_tx
     always_ff @(negedge n_rst, posedge clk) begin
         if (!n_rst) begin
             bitNum <= 3'd0;
+            prev_syncEn = 1'b0;
         end
         else begin
             bitNum <= nxt_bitNum;
+            prev_syncEn = syncEn;
         end
     end
 
@@ -191,7 +174,7 @@ module usb_tx
         Get_TX_Packet_Data = 1'b0;
 
         if (shiftEn == 1'b1) begin
-            if (syncEn == 1'b1) nxt_bitNum = 3'd0;
+            if (beginTransmit) nxt_bitNum = 3'd0;
             else if (stuffEn == 1'b1) nxt_bitNum = bitNum;
             else if (bitNum == 3'd7) nxt_bitNum = 3'd0;
             else nxt_bitNum = bitNum + 1;
@@ -236,8 +219,8 @@ module usb_tx
                 end
                 else nxt_numOne = 3'd0;
             end
-            else if crcEn begin
-                if crcBit begin
+            else if (crcEn) begin
+                if (crcBit) begin
                     if (numOne == 3'd5) nxt_numOne = 3'd0;
                     else nxt_numOne = numOne + 1;
                 end
@@ -260,28 +243,30 @@ module usb_tx
 
     // Encoder
     always_ff @(negedge n_rst, posedge clk) begin
-        if (!n_rst)
-            Dplus_Out <= 1'b1;
-            Dminus_Out <= 1'b0;
-        else
-            Dplus_Out <= nxt_Dplus_Out;
-            Dminus_Out <= nxt_Dminus_Out;
+        if (!n_rst) begin
+            prev_Dplus_Out <= 1'b1;
+            prev_Dminus_Out <= 1'b0;
+        end
+        else begin
+            prev_Dplus_Out <= Dplus_Out;
+            prev_Dminus_Out <= Dminus_Out;
+        end
     end
 
     always_comb begin
-        {nxt_Dplus_Out, nxt_Dminus_Out} = {Dplus_Out, Dminus_Out};
+        {Dplus_Out, Dminus_Out} = {prev_Dplus_Out, prev_Dminus_Out};
 
-        if (shiftEn == 1'b1) begin
+        if (beginBitPeriod == 1'b1) begin
             if (stuffEn == 1'b1) begin
-                {nxt_Dplus_Out, nxt_Dminus_Out} = ~{Dplus_Out, Dminus_Out};
+                {Dplus_Out, Dminus_Out} = ~{prev_Dplus_Out, prev_Dminus_Out};
             end
             else if (syncEn == 1'b1) begin
                 case(bitNum)
                     3'd0, 3'd1, 3'd2, 3'd3, 3'd4, 3'd5, 3'd6: begin
-                        {nxt_Dplus_Out, nxt_Dminus_Out} = ~{Dplus_Out, Dminus_Out};
+                        {Dplus_Out, Dminus_Out} = ~{prev_Dplus_Out, prev_Dminus_Out};
                     end
                     3'd7: begin
-                        {nxt_Dplus_Out, nxt_Dminus_Out} = {Dplus_Out, Dminus_Out};
+                        {Dplus_Out, Dminus_Out} = {prev_Dplus_Out, prev_Dminus_Out};
                     end
                 endcase
             end
@@ -291,11 +276,11 @@ module usb_tx
                         case(bitNum)
                             // 1
                             3'd0, 3'd1, 3'd6, 3'd7: begin
-                                {nxt_Dplus_Out, nxt_Dminus_Out} = {Dplus_Out, Dminus_Out};
+                                {Dplus_Out, Dminus_Out} = {prev_Dplus_Out, prev_Dminus_Out};
                             end
                             // 0
                             3'd2, 3'd3, 3'd4, 3'd5: begin
-                                {nxt_Dplus_Out, nxt_Dminus_Out} = ~{Dplus_Out, Dminus_Out};
+                                {Dplus_Out, Dminus_Out} = ~{prev_Dplus_Out, prev_Dminus_Out};
                             end
                         endcase
                     end
@@ -303,11 +288,11 @@ module usb_tx
                         case(bitNum)
                             // 1
                             3'd1, 3'd4, 3'd6, 3'd7: begin
-                                {nxt_Dplus_Out, nxt_Dminus_Out} = {Dplus_Out, Dminus_Out};
+                                {Dplus_Out, Dminus_Out} = {prev_Dplus_Out, prev_Dminus_Out};
                             end
                             // 0
                             3'd0, 3'd2, 3'd3, 3'd5: begin
-                                {nxt_Dplus_Out, nxt_Dminus_Out} = ~{Dplus_Out, Dminus_Out};
+                                {Dplus_Out, Dminus_Out} = ~{prev_Dplus_Out, prev_Dminus_Out};
                             end
                         endcase
                     end
@@ -315,11 +300,11 @@ module usb_tx
                         case(bitNum)
                             // 1
                             3'd1, 3'd3, 3'd4, 3'd6: begin
-                                {nxt_Dplus_Out, nxt_Dminus_Out} = {Dplus_Out, Dminus_Out};
+                                {Dplus_Out, Dminus_Out} = {prev_Dplus_Out, prev_Dminus_Out};
                             end
                             // 0
                             3'd0, 3'd2, 3'd5, 3'd7: begin
-                                {nxt_Dplus_Out, nxt_Dminus_Out} = ~{Dplus_Out, Dminus_Out};
+                                {Dplus_Out, Dminus_Out} = ~{prev_Dplus_Out, prev_Dminus_Out};
                             end
                         endcase
                     end
@@ -327,27 +312,22 @@ module usb_tx
                         case(bitNum)
                             // 1
                             3'd1, 3'd2, 3'd3, 3'd4: begin
-                                {nxt_Dplus_Out, nxt_Dminus_Out} = {Dplus_Out, Dminus_Out};
+                                {Dplus_Out, Dminus_Out} = {prev_Dplus_Out, prev_Dminus_Out};
                             end
                             // 0
                             3'd0, 3'd5, 3'd6, 3'd7: begin
-                                {nxt_Dplus_Out, nxt_Dminus_Out} = ~{Dplus_Out, Dminus_Out};
+                                {Dplus_Out, Dminus_Out} = ~{prev_Dplus_Out, prev_Dminus_Out};
                             end
                         endcase
                     end
                 endcase
             end
             else if (dataEn == 1'b1) begin
-                if (nxtBit == 1'b0) {nxt_Dplus_Out, nxt_Dminus_Out} = ~{Dplus_Out, Dminus_Out};
+                if (nxtBit == 1'b0) {Dplus_Out, Dminus_Out} = ~{prev_Dplus_Out, prev_Dminus_Out};
             end
-            else begin
-                {nxt_Dplus_Out, nxt_Dminus_Out} = 2'b0;
+            else if (eofEn == 1'b1) begin
+                {Dplus_Out, Dminus_Out} = 2'b0;
             end
         end
     end
-
-    // CRC-16
-    reg crcBit;
-    //TODO
-
 endmodule
