@@ -19,12 +19,10 @@ include /home/ecegrid/a/ece337/Course_Prod/course_make_vars
 #
 # **** list all files on the same line. DO NOT USE the "\" escape character to extend across
 #      multiple lines. The grading script expects all file names on one line.
-COMPONENT_FILES	:=
+COMPONENT_FILES	:= crc crc5 crc16
 
 # Specify the name of the top level file (do not include the source folder in the name)
-# NOTE: YOU WILL NEED TO SET THIS VARIABLE'S VALUE WHEN WORKING WITH HEIRARCHICAL DESIGNS
-# AND THE AUTOMATED GRADING SYSTEM
-TOP_LEVEL_FILE	:=
+TOP_LEVEL_FILE	:= usb_rx
 
 # Specify the filepath of the test bench you want to use (ie. tb_top_level.sv)
 # (do not include the source folder in the name)
@@ -35,7 +33,7 @@ TEST_BENCH	:= tb_$(TOP_LEVEL_FILE)
 #
 # **** list all files on the same line. DO NOT USE the "\" escape character to extend across
 #      multiple lines. The grading script expects all file names on one line.
-TB_HELPER_FILES	:=
+TB_HELPER_FILES	:= tb_usb_transmit
 
 # Get the top level design and test_bench module names
 TB_MODULE		:= $(notdir $(basename $(TEST_BENCH)))
@@ -221,8 +219,10 @@ define CONSOLE_SIM_CMDS
 endef
 
 # This rule defines how to simulate the source form of the full design
-sim_full_source: $(addprefix $(S_WORK_LIB)/, \
-		$(notdir $(basename $(TOP_LEVEL_FILE) $(TEST_BENCH) $(TB_HELPER_FILES) $(COMPONENT_FILES))))
+sim_full_source: \
+	$(addprefix $(S_WORK_LIB)/, $(notdir $(basename $(TOP_LEVEL_FILE) $(COMPONENT_FILES)))) \
+	$(addprefix $(S_WORK_LIB)/, $(notdir $(basename $(TEST_BENCH) $(TB_HELPER_FILES)))) 
+
 	@echo -e "Simulating Source Design"
 # Uncomment below if you want to just run the simulation as a console command
 # using the commands listed in the CONSOLE_SIM_CMDS definition above instead of
@@ -235,13 +235,15 @@ sim_full_source: $(addprefix $(S_WORK_LIB)/, \
 
 # This way just runs it like normal and only sets up the simulation but doesn't
 # run it or add any waveforms
-	@$(SIMULATE) -i -t ps $(S_WORK_LIB).$(TB_MODULE)
+	@$(SIMULATE) -i -t ps $(S_WORK_LIB).$(TB_MODULE) -do runme.do
 	@cp -f transcript $(basename $(TOP_LEVEL_FILE)).stran
 	@echo -e "Done simulating the source design\n\n"
 
 # This rule defines how to simulate the mapped form of the full design
-sim_full_mapped: $(addprefix $(M_WORK_LIB)/, \
-		$(notdir $(basename $(TOP_LEVEL_FILE) $(TEST_BENCH) $(TB_HELPER_FILES))))
+sim_full_mapped: \
+	$(addprefix $(M_WORK_LIB)/, $(notdir $(basename $(TOP_LEVEL_FILE) $(COMPONENT_FILES)))) \
+	$(addprefix $(M_WORK_LIB)/, $(notdir $(basename $(TEST_BENCH) $(TB_HELPER_FILES)))) 
+
 	@echo -e "Simulating Mapped Design"
 # Uncomment below if you want to just run the simulation as a console command
 # using the commands listed in the CONSOLE_SIM_CMDS definition above instead of
@@ -254,7 +256,7 @@ sim_full_mapped: $(addprefix $(M_WORK_LIB)/, \
 
 # This way just runs it like normal and only sets up the simulation but doesn't
 # run it or add any waveforms
-	@$(SIMULATE) -i -t ps $(M_WORK_LIB).$(TB_MODULE)
+	@$(SIMULATE) -i -t ps $(M_WORK_LIB).$(TB_MODULE) -do runme.do
 	@cp -f transcript $(basename $(TOP_LEVEL_FILE)).mtran
 	@echo -e "Done simulating the mapped design\n\n"
 
