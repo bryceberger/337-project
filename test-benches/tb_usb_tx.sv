@@ -53,7 +53,7 @@ module tb_usb_tx ();
         tb_expected_trans_act,
         tb_expected_TX_Error,
         tb_expected_Get_TX_Packet_Data;
-    reg [7:0] tb_data[];
+    bit [7:0] tb_data[];
     bit [15:0] crc;
     logic xr;
     int count;
@@ -127,13 +127,13 @@ module tb_usb_tx ();
 
         assert (get_tx_packet_data == tb_expected_Get_TX_Packet_Data)
             $info(
-                "Test case %0d: Correct 'TX_Packet_Data' output %s",
+                "Test case %0d: Correct 'GET_TX_Packet_Data' output %s",
                 tb_test_num,
                 check_tag
             );
         else
             $error(
-                "Test case %0d: Incorrect 'TX_Packet_Data' output %s (Expected=0b%b, Actual=0b%b)",
+                "Test case %0d: Incorrect 'GET_TX_Packet_Data' output %s (Expected=0b%b, Actual=0b%b)",
                 tb_test_num,
                 check_tag,
                 tb_expected_Get_TX_Packet_Data,
@@ -181,7 +181,6 @@ module tb_usb_tx ();
 
         // Record output 'pid' byte
         for (int i = 0; i < 8; i++) begin
-            //if (i != 0) 
             for (int j = 0; j < 8; j++) @(negedge clk);
             decode_NRZI(.EOP(eop_byte[i]), .Dorig(pid_byte[i]));
             check_outputs("while outputting 'pid' byte");
@@ -213,13 +212,13 @@ module tb_usb_tx ();
 
         // Record output 'data' byte
         for (int i = 0; i < 8; i++) begin
-            if (i != 0) for (int j = 0; j < 8; j++) @(negedge clk);
+            for (int j = 0; j < 8; j++) @(negedge clk);
             decode_NRZI(.EOP(eop_byte[i]), .Dorig(data_byte[i]));
-            if (i == 7) tb_expected_Get_TX_Packet_Data = 1;
+            if ((i == 7) && (buffer_occupancy != 7'd0)) tb_expected_Get_TX_Packet_Data = 1;
             check_outputs("while outputting 'data' byte");
         end
         tb_expected_Get_TX_Packet_Data = 0;
-        buffer_occupancy               = buffer_occupancy - 1;
+        if (buffer_occupancy != 7'd0) buffer_occupancy = buffer_occupancy - 1;
 
         // Check if EOP was ever asserted
         assert (eop_byte == 8'd0)
@@ -230,10 +229,10 @@ module tb_usb_tx ();
 
         // Check if correct 'data' byte output
         assert (data_byte == expected_data_byte)
-            $info("Test case %0d: Correct 'pid' byte output", tb_test_num);
+            $info("Test case %0d: Correct 'data' byte output", tb_test_num);
         else
             $error(
-                "Test case %0d: Incorrect 'pid' byte output (Expected=0b%b, Actual=0b%b)",
+                "Test case %0d: Incorrect 'data' byte output (Expected=0b%b, Actual=0b%b)",
                 tb_test_num,
                 expected_data_byte,
                 data_byte
@@ -247,7 +246,6 @@ module tb_usb_tx ();
 
         // Record output 'pid' byte
         for (int i = 0; i < 16; i++) begin
-            // if (i != 0)
             for (int j = 0; j < 8; j++) @(negedge clk);
             decode_NRZI(.EOP(eop_bytes[i]), .Dorig(crc_bytes[i]));
             check_outputs("while outputting CRC");
@@ -493,6 +491,8 @@ module tb_usb_tx ();
         for (int i = 0; i < 12; i++) @(posedge clk);
         tb_expected_trans_act = 1'b0;
         check_outputs("after transmitting DATA0 packet w/ 0 bytes of data");
+        
+        @(posedge clk);
 
         // **************************************************
         // Test Case 5: Nominal Packet Transmission - DATA0 (1 byte of data)
@@ -508,7 +508,7 @@ module tb_usb_tx ();
         // Set input signals
         tx_start         = 1'b1;
         tx_packet        = TX_PACKET_DATA0;
-        buffer_occupancy = 7'd1;
+        buffer_occupancy = 7'd0;
         assert (rng.randomize() == 1);
         tb_data[0]            = rng.data;
         tx_packet_data        = tb_data[0];
@@ -534,6 +534,8 @@ module tb_usb_tx ();
         for (int i = 0; i < 12; i++) @(posedge clk);
         tb_expected_trans_act = 1'b0;
         check_outputs("after transmitting DATA0 packet w/ 1 byte of data");
+        
+        @(posedge clk);
 
         // **************************************************
         // Test Case 6: Nominal Packet Transmission - DATA0 (32 bytes of data)
@@ -543,14 +545,15 @@ module tb_usb_tx ();
         tx_start = 1'b0;
         tx_packet = 2'd0;
         buffer_occupancy = 7'd0;
-        tb_data = new[32];
+        tb_data = new[1];
         reset_dut();
 
         // Set input signals
         tx_start         = 1'b1;
         tx_packet        = TX_PACKET_DATA0;
-        buffer_occupancy = 7'd32;
-        foreach (tb_data[i]) begin
+        buffer_occupancy = 7'd31;
+        assert (rng.randomize() == 1);
+        for (int i = 0; i < 32; i++) begin
             assert (rng.randomize() == 1);
             tb_data[i] = rng.data;
         end
@@ -570,7 +573,7 @@ module tb_usb_tx ();
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
-        foreach (tb_data[i]) begin
+        for (int i = 0; i < 32; i++) begin
             tx_packet_data = tb_data[i];
             check_data(tb_data[i]);
         end
@@ -580,6 +583,8 @@ module tb_usb_tx ();
         for (int i = 0; i < 12; i++) @(posedge clk);
         tb_expected_trans_act = 1'b0;
         check_outputs("after transmitting DATA0 packet w/ 32 bytes of data");
+        
+        @(posedge clk);
 
         // **************************************************
         // Test Case 7: Nominal Packet Transmission - DATA0 (64 bytes of data)
@@ -589,14 +594,15 @@ module tb_usb_tx ();
         tx_start = 1'b0;
         tx_packet = 2'd0;
         buffer_occupancy = 7'd0;
-        tb_data = new[64];
+        tb_data = new[1];
         reset_dut();
 
         // Set input signals
         tx_start         = 1'b1;
         tx_packet        = TX_PACKET_DATA0;
-        buffer_occupancy = 7'd64;
-        foreach (tb_data[i]) begin
+        buffer_occupancy = 7'd63;
+        assert (rng.randomize() == 1);
+        for (int i = 0; i < 64; i++) begin
             assert (rng.randomize() == 1);
             tb_data[i] = rng.data;
         end
@@ -616,7 +622,7 @@ module tb_usb_tx ();
         check_sync();
         tx_start = 1'b0;
         check_pid(DATA0_PID);
-        foreach (tb_data[i]) begin
+        for (int i = 0; i < 64; i++) begin
             tx_packet_data = tb_data[i];
             check_data(tb_data[i]);
         end
@@ -626,6 +632,8 @@ module tb_usb_tx ();
         for (int i = 0; i < 12; i++) @(posedge clk);
         tb_expected_trans_act = 1'b0;
         check_outputs("after transmitting DATA0 packet w/ 64 bytes of data");
+        
+        @(posedge clk);
 
         // **************************************************
         // Test Case 8: Nominal Packet Transmission - STALL
@@ -672,7 +680,7 @@ module tb_usb_tx ();
         // Set input signals
         tx_start              = 1'b1;
         tx_packet             = TX_PACKET_DATA0;
-        buffer_occupancy      = 7'd1;
+        buffer_occupancy      = 7'd0;
         tb_data[0]            = 8'b11111111;
         tx_packet_data        = tb_data[0];
 
@@ -709,6 +717,8 @@ module tb_usb_tx ();
         tb_expected_trans_act = 1'b0;
         check_outputs(
             "after transmitting DATA0 packet w/ bit-stuffing at beginning");
+            
+        @(posedge clk);
 
         // **************************************************
         // Test Case 10: Bit-Stuffing at Middle of DATA0 Packet
@@ -724,7 +734,7 @@ module tb_usb_tx ();
         // Set input signals
         tx_start              = 1'b1;
         tx_packet             = TX_PACKET_DATA0;
-        buffer_occupancy      = 7'd1;
+        buffer_occupancy      = 7'd0;
         tb_data[0]            = 8'b01111110;
         tx_packet_data        = tb_data[0];
 
@@ -761,6 +771,8 @@ module tb_usb_tx ();
         tb_expected_trans_act = 1'b0;
         check_outputs(
             "after transmitting DATA0 packet w/ bit-stuffing at middle");
+            
+        @(posedge clk);
 
         // **************************************************
         // Test Case 11: Bit-Stuffing at End of DATA0 Packet
@@ -776,7 +788,7 @@ module tb_usb_tx ();
         // Set input signals
         tx_start              = 1'b1;
         tx_packet             = TX_PACKET_DATA0;
-        buffer_occupancy      = 7'd1;
+        buffer_occupancy      = 7'd0;
         tb_data[0]            = 8'b00111111;
         tx_packet_data        = tb_data[0];
 
