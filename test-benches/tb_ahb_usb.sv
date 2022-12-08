@@ -24,11 +24,11 @@ module tb_ahb_usb ();
     } addr_e;
 
     localparam bit [15:0] 
-        STATUS_DATA = 'h0,
-        STATUS_IN = 'h1,
-        STATUS_OUT = 'h2,
-        STATUS_ACK = 'h4,
-        STATUS_NAK = 'h8,
+        STATUS_DATA = 'h1,
+        STATUS_IN = 'h2,
+        STATUS_OUT = 'h4,
+        STATUS_ACK = 'h8,
+        STATUS_NAK = 'h10,
         STATUS_RX = 'h100,
         STATUS_TX = 'h200;
 
@@ -201,7 +201,7 @@ module tb_ahb_usb ();
     task check_received_data(input byte expected[]);
         automatic int i = 0;
         if (expected.size() == 0) return;
-        for (i = 0; i < expected.size() - 4; i += 4)
+        for (i = 0; i < expected.size() - 5; i += 4) begin
             a_bus.add(.addr(ADDR_DATA),
                       .data({
                           expected[i+3],
@@ -209,8 +209,11 @@ module tb_ahb_usb ();
                           expected[i+1],
                           expected[i]
                       }));
-        for (int j = i; j < expected.size(); j++)
-            a_bus.add(.addr(ADDR_DATA), .data(expected[j]), .size(0));
+        end
+        a_bus.execute();
+        for (int j = i; j < expected.size(); j++) begin
+            a_bus.add(.addr(ADDR_DATA), .data({24'h0, expected[j]}), .size(0));
+        end
         a_bus.execute();
     endtask
 
@@ -263,14 +266,14 @@ module tb_ahb_usb ();
         reset_dut();
 
         subtest_case = "Sending IN token (USB)";
-        u_bus.enqueue_usb_token(0);
+        u_bus.enqueue_usb_token(1);
         u_bus.send_usb_packet();
         subtest_case = "Reading AHB Memory";
         a_bus.add(.addr(ADDR_STATUS), .data(STATUS_IN));
         a_bus.execute();
 
         subtest_case = "Sending OUT token (USB)";
-        u_bus.enqueue_usb_token(1);
+        u_bus.enqueue_usb_token(0);
         u_bus.send_usb_packet();
         subtest_case = "Reading AHB Memory";
         a_bus.add(.addr(ADDR_STATUS), .data(STATUS_OUT));
@@ -302,14 +305,17 @@ module tb_ahb_usb ();
             begin
                 // wait until actual data is being sent
                 #(CLK_PERIOD * 200);
+                subtest_case = "Reading data in progress";
                 a_bus.add(.addr(ADDR_STATUS), .data(STATUS_RX));
                 a_bus.execute();
             end
         join
+        subtest_case = "Reading final buffer state";
         a_bus.add(.addr(ADDR_STATUS), .data(STATUS_DATA));
         a_bus.add(.addr(ADDR_BUFFER_OCC), .data(rng.num));
         a_bus.execute();
         check_received_data(rng.data);
+        subtest_case = "Flushing buffer";
         a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(1), .write(1), .size(0));
         a_bus.execute();
         #(CLK_PERIOD * 5);
@@ -317,6 +323,8 @@ module tb_ahb_usb ();
         a_bus.add(.addr(ADDR_BUFFER_OCC), .data(0));
         a_bus.execute();
 
+        @(posedge clk);
+        @(negedge clk);
         subtest_case = "Sending 0 data";
         u_bus.enqueue_usb_data(.data({}));
         u_bus.send_usb_packet();
@@ -324,7 +332,7 @@ module tb_ahb_usb ();
         a_bus.add(.addr(ADDR_STATUS), .data(STATUS_DATA));
         a_bus.add(.addr(ADDR_BUFFER_OCC), .data(0));
         a_bus.execute();
-        a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(1));
+        a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(1), .write(1), .size(0));
         a_bus.execute();
 
         subtest_case = "Sending 64 data";
@@ -337,7 +345,7 @@ module tb_ahb_usb ();
         a_bus.add(.addr(ADDR_BUFFER_OCC), .data(64));
         a_bus.execute();
         check_received_data(rng.data);
-        a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(1));
+        a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(1), .write(1), .size(0));
         a_bus.execute();
 
         // **************************************************
@@ -383,12 +391,25 @@ module tb_ahb_usb ();
             @(posedge clk);
         end
 
+        subtest_case = "Sending data";
+        rng.num      = 20;
+        assert (rng.randomize() == 1);
+        for (int i = 0; i < rng.data.size(); i += 4)
+            a_bus.add(.addr(ADDR_DATA),
+                      .data({
+                          rng.data[i+3],
+                          rng.data[i+2],
+                          rng.data[i+1],
+                          rng.data[i]
+                      }),
+                      .write(1));
+        a_bus.add(.addr(ADDR_TX_CONTROL), .data(TX_SEND_DATA), .write(1));
+        a_bus.execute();
+
+        for (int i = 0; i < 10; i++) begin
+            assert property (BeginPacket);
+            @(posedge clk);
+        end
+
     end
-    property BadBadBad;
-        @(posedge clk) disable iff (!n_rst) $rose(
-            d_mode
-        ) ##[0:3] $fell(
-            tx_dp
-        );
-    endproperty
 endmodule

@@ -19,10 +19,10 @@ include /home/ecegrid/a/ece337/Course_Prod/course_make_vars
 #
 # **** list all files on the same line. DO NOT USE the "\" escape character to extend across
 #      multiple lines. The grading script expects all file names on one line.
-COMPONENT_FILES	:= crc crc5 crc16
+COMPONENT_FILES	:= crc crc5 crc16 ahb_slave data_buffer flex_counter flex_pts_sr states usb_rx usb_tx
 
 # Specify the name of the top level file (do not include the source folder in the name)
-TOP_LEVEL_FILE	:= usb_rx
+TOP_LEVEL_FILE	:= ahb_usb
 
 # Specify the filepath of the test bench you want to use (ie. tb_top_level.sv)
 # (do not include the source folder in the name)
@@ -33,7 +33,7 @@ TEST_BENCH	:= tb_$(TOP_LEVEL_FILE)
 #
 # **** list all files on the same line. DO NOT USE the "\" escape character to extend across
 #      multiple lines. The grading script expects all file names on one line.
-TB_HELPER_FILES	:= tb_usb_transmit
+TB_HELPER_FILES	:= 
 
 # Get the top level design and test_bench module names
 TB_MODULE		:= $(notdir $(basename $(TEST_BENCH)))
@@ -235,7 +235,7 @@ sim_full_source: \
 
 # This way just runs it like normal and only sets up the simulation but doesn't
 # run it or add any waveforms
-	@$(SIMULATE) -i -t ps $(S_WORK_LIB).$(TB_MODULE) -do runme.do
+	@$(SIMULATE) -i -t ps $(S_WORK_LIB).$(TB_MODULE)
 	@cp -f transcript $(basename $(TOP_LEVEL_FILE)).stran
 	@echo -e "Done simulating the source design\n\n"
 

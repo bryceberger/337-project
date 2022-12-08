@@ -55,16 +55,25 @@ module ahb_slave (
     logic [3:0] addr;
     logic       enable;
 
-    assign enable    = hsel && htrans != IDLE;
-    assign d_mode    = tx_transfer_active;
-    assign tx_packet = mem['hc][2:0] - 1;
-    assign tx_start  = |mem['hc];
-    assign tx_data   = hwdata;
-    assign clear     = |mem['hd];
+    assign d_mode      = tx_transfer_active;
+    assign tx_packet   = mem['hc][2:0] - 1;
+    assign tx_start    = |mem['hc];
+    assign tx_data     = hwdata;
+    assign clear       = |mem['hd];
 
+    assign enable      = hsel && htrans != IDLE;
+    /*
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) enable <= 0;
+        else enable <= hsel && htrans != IDLE;
+	*/
+
+    assign get_rx_data = enable && !hwrite && addr == 0 ? hsize + 1 : 0;
+    /*
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) get_rx_data <= 0;
         else get_rx_data <= enable && !hwrite && addr == 0 ? hsize + 1 : 0;
+	*/
 
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) store_tx_data <= 0;
@@ -78,18 +87,18 @@ module ahb_slave (
         else prev_transfer <= rx_transfer_active;
 
     logic clear_status;
-    assign clear_status = (addr == 4 && !write);
+    assign clear_status = (addr == 4 && !write) || rx_error;
     /* svlint off sequential_block_in_always_ff */  // only assigning to mem
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) mem <= '{18{0}};
         else begin
             mem['h4] <= {
                 3'h0,
-                transfer_falling ? rx_packet == 3 : clear_status ? 1'b0 : mem['hc][4], // nack
-                transfer_falling ? rx_packet == 2 : clear_status ? 1'b0 : mem['hc][3], // ack
-                transfer_falling ? rx_packet == 0 : clear_status ? 1'b0 : mem['hc][2], // out
-                transfer_falling ? rx_packet == 1 : clear_status ? 1'b0 : mem['hc][1], // in
-                rx_data_ready ? 1'b1 : rx_transfer_active || clear_status ? 1'b0 : mem['hc][0]
+                transfer_falling && rx_packet == 3 ? 1'b1 : clear_status ? 1'b0 : mem['h4][4], // nack
+                transfer_falling && rx_packet == 2 ? 1'b1 : clear_status ? 1'b0 : mem['h4][3], // ack
+                transfer_falling && rx_packet == 0 ? 1'b1 : clear_status ? 1'b0 : mem['h4][2], // out
+                transfer_falling && rx_packet == 1 ? 1'b1 : clear_status ? 1'b0 : mem['h4][1], // in
+                rx_data_ready ? 1'b1 : rx_transfer_active || clear_status ? 1'b0 : mem['h4][0]
             };
             mem['h5] <= {6'h0, tx_transfer_active, rx_transfer_active};
             mem['h6] <= {7'h0, rx_error};
@@ -145,7 +154,7 @@ module ahb_slave (
     // address decoding
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) addr <= 0;
-        else if (!enable) addr <= 0;
+        else if (!enable) addr <= 'h8;
         else if (haddr < 4) addr <= 0;
         else
             case (hsize)
@@ -165,6 +174,7 @@ module ahb_slave (
     always_comb
         if (addr == 0) read_source = rx_data;
         else read_source = {mem[addr+3], mem[addr+2], mem[addr+1], mem[addr]};
+
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) hrdata <= 0;
         else if (!enable) hrdata <= 0;
