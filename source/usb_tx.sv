@@ -93,6 +93,13 @@ module usb_tx (
     // Encoder Variables
     reg prev_dp, prev_dm;
 
+    logic [1:0] tx_packet_reg;
+
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) tx_packet_reg <= 0;
+        else if (tx_start) tx_packet_reg <= tx_packet;
+        else tx_packet_reg <= tx_packet_reg;
+
     // Clock Divider
     flex_counter #(
         .NUM_CNT_BITS(4)
@@ -124,9 +131,9 @@ module usb_tx (
             end
             pid: begin
                 if (endByte == 1'b1) begin
-                    if (tx_packet == TX_PACKET_DATA0 && buffer_occupancy)
+                    if (tx_packet_reg == TX_PACKET_DATA0 && buffer_occupancy)
                         nxt_state = data;
-                    else if (tx_packet == TX_PACKET_DATA0) nxt_state = crc1;
+                    else if (tx_packet_reg == TX_PACKET_DATA0) nxt_state = crc1;
                     else nxt_state = eof1;
                 end
             end
@@ -207,7 +214,8 @@ module usb_tx (
         endByte            = 1'b0;
         get_tx_packet_data = 1'b0;
 
-        if (shiftEn == 1'b1) begin
+        if (!tx_transfer_active) nxt_bitNum = 0;
+        else if (shiftEn == 1'b1) begin
             if (beginTransmit) nxt_bitNum = 3'd0;
             else if (stuffEn == 1'b1) nxt_bitNum = bitNum;
             else if (bitNum == 3'd7) nxt_bitNum = 3'd0;
@@ -253,6 +261,7 @@ module usb_tx (
     // Encoder
     always_ff @(negedge n_rst, posedge clk)
         if (!n_rst) {prev_dp, prev_dm} <= 2'b10;
+        else if (!tx_transfer_active) {prev_dp, prev_dm} <= 2'b10;
         else {prev_dp, prev_dm} <= {dp, dm};
 
     always_comb
@@ -265,7 +274,7 @@ module usb_tx (
                     7: {dp, dm} = {prev_dp, prev_dm};
                 endcase
             end else if (pidEn == 1'b1) begin
-                case (tx_packet)
+                case (tx_packet_reg)
                     TX_PACKET_DATA0: begin  // 11000011
                         case (bitNum) inside
                             // 1

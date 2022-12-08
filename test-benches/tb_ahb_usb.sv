@@ -29,13 +29,13 @@ module tb_ahb_usb ();
         STATUS_OUT = 'h2,
         STATUS_ACK = 'h4,
         STATUS_NAK = 'h8,
-        STATUS_RX = 'h10,
-        STATUS_TX = 'h20;
+        STATUS_RX = 'h100,
+        STATUS_TX = 'h200;
 
     localparam bit [15:0] 
         TX_SEND_DATA = 'h1,
         TX_SEND_ACK = 'h2,
-        TX_SEND_NACK = 'h3,
+        TX_SEND_NAK = 'h3,
         TX_SEND_STALL = 'h4;
 
     // testbench signals
@@ -166,21 +166,25 @@ module tb_ahb_usb ();
         TX_nEop [*] ##1 TX_Eop [*] ##1 TX_nEop;
     endsequence
 
+        property TestProperty;
+        @(posedge clk) disable iff (!n_rst)
+            $rose(d_mode) |-> ##[0:3] Sync ##1 HandshakePID ##[0:3] TX_Eop ##[16:20] !d_mode
+        endproperty
+
     property BeginPacket;
         @(posedge clk) disable iff (!n_rst)
         $rose(d_mode) |-> (
-            (Sync ##1 ( // good sync
+            (##[0:3] Sync ##1 ( // good sync
                 (TokenPID ##1 CorrectTokenPacket)
                 or
                 (DataPID ##1 CorrectDataPacket)
                 or
                 (HandshakePID ##1 (
                     ##[0:3] TX_Eop // immediate EOP
-                    ##12 !d_mode // transfer inactive
+                    ##[16:20] !d_mode // transfer inactive
                 ))
             ))
         )
-        // TODO fix for stuffed bits and CRC checking
     endproperty
     /* verilog_format: on */
 
@@ -237,7 +241,6 @@ module tb_ahb_usb ();
         // Initialize Test Case Navigation Signals
         test_case = "Initialization";
         test_num  = -1;
-        init_usb_inputs();
 
         @(posedge clk);
 
@@ -307,6 +310,12 @@ module tb_ahb_usb ();
         a_bus.add(.addr(ADDR_BUFFER_OCC), .data(rng.num));
         a_bus.execute();
         check_received_data(rng.data);
+        a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(1), .write(1), .size(0));
+        a_bus.execute();
+        #(CLK_PERIOD * 5);
+        a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(0), .size(0));
+        a_bus.add(.addr(ADDR_BUFFER_OCC), .data(0));
+        a_bus.execute();
 
         subtest_case = "Sending 0 data";
         u_bus.enqueue_usb_data(.data({}));
@@ -314,6 +323,8 @@ module tb_ahb_usb ();
         subtest_case = "Reading AHB Memory";
         a_bus.add(.addr(ADDR_STATUS), .data(STATUS_DATA));
         a_bus.add(.addr(ADDR_BUFFER_OCC), .data(0));
+        a_bus.execute();
+        a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(1));
         a_bus.execute();
 
         subtest_case = "Sending 64 data";
@@ -326,6 +337,8 @@ module tb_ahb_usb ();
         a_bus.add(.addr(ADDR_BUFFER_OCC), .data(64));
         a_bus.execute();
         check_received_data(rng.data);
+        a_bus.add(.addr(ADDR_FLUSH_BUFFER), .data(1));
+        a_bus.execute();
 
         // **************************************************
         // Sending USB Packets
@@ -333,21 +346,49 @@ module tb_ahb_usb ();
         new_test("Sending USB Packets");
         reset_dut();
 
+        // this will be verified good by the checker
         subtest_case = "Sending ACK";
-        fork
-            begin
-                a_bus.add(.addr(ADDR_TX_CONTROL), .data(TX_SEND_ACK));
-                a_bus.execute();
-                #(CLK_PERIOD * 5);
-                disable CONSTANT_ASSERT_ACK_BEGIN;
-            end
-            begin : CONSTANT_ASSERT_ACK_BEGIN
-                while (1) begin
-                    @(posedge clk);
-                    assert property (BeginPacket);
-                end
-            end
-        join
+        a_bus.add(.addr(ADDR_TX_CONTROL), .data(TX_SEND_ACK), .write(1));
+        a_bus.execute();
+
+        for (int i = 0; i < 10; i++) begin
+            assert property (BeginPacket);
+            @(posedge clk);
+        end
+
+        @(negedge d_mode);
+        #(CLK_PERIOD * 10);
+        subtest_case = "Sending NAK";
+        a_bus.add(.addr(ADDR_TX_CONTROL), .data(TX_SEND_NAK), .write(1));
+        a_bus.execute();
+
+        for (int i = 0; i < 10; i++) begin
+            assert property (BeginPacket);
+            @(posedge clk);
+        end
+
+        // ensure that flag is high when transmitting
+        #(CLK_PERIOD * 5);
+        a_bus.add(.addr(ADDR_STATUS), .data(STATUS_TX));
+        a_bus.execute();
+
+        @(negedge d_mode);
+        #(CLK_PERIOD * 10);
+        subtest_case = "Sending STALL";
+        a_bus.add(.addr(ADDR_TX_CONTROL), .data(TX_SEND_STALL), .write(1));
+        a_bus.execute();
+
+        for (int i = 0; i < 10; i++) begin
+            assert property (BeginPacket);
+            @(posedge clk);
+        end
 
     end
+    property BadBadBad;
+        @(posedge clk) disable iff (!n_rst) $rose(
+            d_mode
+        ) ##[0:3] $fell(
+            tx_dp
+        );
+    endproperty
 endmodule

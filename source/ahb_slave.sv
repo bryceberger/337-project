@@ -20,7 +20,7 @@ module ahb_slave (
     output var hresp,
     output var hready,
     // rx inputs
-    input var [3:0] rx_packet,
+    input var [2:0] rx_packet,
     input var rx_data_ready,
     input var rx_transfer_active,
     input var rx_error,
@@ -28,11 +28,11 @@ module ahb_slave (
     input var tx_transfer_active,
     input var tx_error,
     // tx outputs
-    output var [2:0] tx_packet,
+    output var [1:0] tx_packet,
     output var tx_start,
     // data buffer inputs
     input var [31:0] rx_data,
-    input var [7:0] buffer_occupancy,
+    input var [6:0] buffer_occupancy,
     // data buffer outputs
     output var [1:0] get_rx_data,
     output var [1:0] store_tx_data,
@@ -64,10 +64,11 @@ module ahb_slave (
 
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) get_rx_data <= 0;
-        else get_rx_data <= !hwrite && addr == 0 ? hsize + 1 : 0;
+        else get_rx_data <= enable && !hwrite && addr == 0 ? hsize + 1 : 0;
+
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) store_tx_data <= 0;
-        else store_tx_data <= hwrite && addr == 0 ? hsize + 1 : 0;
+        else store_tx_data <= enable && hwrite && addr == 0 ? hsize + 1 : 0;
 
     logic prev_transfer;
     logic transfer_falling;
@@ -84,10 +85,10 @@ module ahb_slave (
         else begin
             mem['h4] <= {
                 3'h0,
-                transfer_falling ? rx_packet == NACK : clear_status ? 1'b0 : mem['hc][4],
-                transfer_falling ? rx_packet == ACK : clear_status ? 1'b0 : mem['hc][3],
-                transfer_falling ? rx_packet == OUT : clear_status ? 1'b0 : mem['hc][2],
-                transfer_falling ? rx_packet == IN : clear_status ? 1'b0 : mem['hc][1],
+                transfer_falling ? rx_packet == 3 : clear_status ? 1'b0 : mem['hc][4], // nack
+                transfer_falling ? rx_packet == 2 : clear_status ? 1'b0 : mem['hc][3], // ack
+                transfer_falling ? rx_packet == 0 : clear_status ? 1'b0 : mem['hc][2], // out
+                transfer_falling ? rx_packet == 1 : clear_status ? 1'b0 : mem['hc][1], // in
                 rx_data_ready ? 1'b1 : rx_transfer_active || clear_status ? 1'b0 : mem['hc][0]
             };
             mem['h5] <= {6'h0, tx_transfer_active, rx_transfer_active};
@@ -99,7 +100,7 @@ module ahb_slave (
             else mem['hd] <= mem['hd];
 
             // give tx_transfer_active a clock cycle to go high
-            if (mem['hc][7] && !tx_transfer_active) mem['hc] <= 0;
+            if (mem['hc][7] && tx_transfer_active) mem['hc] <= 0;
             else if (mem['hc]) mem['hc] <= {1'b1, mem['hc][6:0]};
             else mem['hc] <= mem['hc];
 

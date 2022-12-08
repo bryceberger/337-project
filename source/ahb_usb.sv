@@ -26,7 +26,7 @@ module ahb_usb (
     output var tx_dm
 );
     // out of rx
-    logic [3:0] rx_packet;
+    logic [2:0] rx_packet;
     logic [7:0] rx_packet_data;
     logic
         rx_data_ready,
@@ -39,11 +39,10 @@ module ahb_usb (
     // out of data buffer
     logic [31:0] rx_data;
     logic [7:0] tx_packet_data;
-    logic [7:0] buffer_occupancy;
+    logic [6:0] buffer_occupancy;
     // out of slave
-    logic [2:0] tx_packet;
     logic tx_start;
-    logic [1:0] get_rx_data, store_tx_data;
+    logic [1:0] get_rx_data, store_tx_data, tx_packet;
     logic [31:0] tx_data;
     logic clear;
 
@@ -59,7 +58,7 @@ module ahb_usb (
     usb_tx tx (
         .*,
         .dp(tx_dp),
-        .dm(rx_dm)
+        .dm(tx_dm)
     );
 
 endmodule
