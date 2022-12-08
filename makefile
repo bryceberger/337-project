@@ -227,7 +227,7 @@ sim_full_source: \
 # Uncomment below if you want to just run the simulation as a console command
 # using the commands listed in the CONSOLE_SIM_CMDS definition above instead of
 # .do file and have the transcript contents to be saved to a file
-#	@$(SIMULATE) -c -t ps -do $(CONSOLE_SIM_CMDS) $(S_WORK_LIB).$(TB_MODULE) > source.tran
+	#@$(SIMULATE) -c -t ps -do $(CONSOLE_SIM_CMDS) $(S_WORK_LIB).$(TB_MODULE) > source.tran
 
 # Uncomment below if you want run the simulation the normal way and have it
 # run the specified .do file
@@ -259,6 +259,11 @@ sim_full_mapped: \
 	@$(SIMULATE) -i -t ps $(M_WORK_LIB).$(TB_MODULE) -do runme.do
 	@cp -f transcript $(basename $(TOP_LEVEL_FILE)).mtran
 	@echo -e "Done simulating the mapped design\n\n"
+
+# Define a pattern rule for simulating the source version of individual files	without a testbench
+tbsim_%_source_save: $(S_WORK_LIB)/%
+	@$(SIMULATE) -c -t ps -do $(CONSOLE_SIM_CMDS) $(dir $<).tb_$* > source.tran
+	@cp -f transcript $*.stran
 
 # Define a pattern rule for simulating the source version of individual files	without a testbench
 sim_%_source: $(S_WORK_LIB)/%

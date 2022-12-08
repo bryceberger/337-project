@@ -2,8 +2,9 @@ module crc #(
     nbits,
     parameter logic [(nbits-1):0] polynomial,
     parameter logic [(nbits-1):0] residual
-)(
-    input wire clk, input wire n_rst,
+) (
+    input wire clk,
+    input wire n_rst,
     input wire data,
     input wire shift,
     input wire clear,
