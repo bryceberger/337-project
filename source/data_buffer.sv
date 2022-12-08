@@ -22,13 +22,9 @@ module data_buffer (
     output var [7:0] tx_data_out
 );
 
-    clocking ce @(posedge clk, negedge n_rst);
-    endclocking
+    assign tx_data_out = rx_data_out[7:0];
 
-    logic [31:0] out;
-    alias out = rx_data_out; alias tx_data_out = rx_data_out[7:0];
-
-    logic [7:0] mem[63:0];
+    logic [7:0] mem[67:0];
     logic [6:0] write_ptr;
     logic [6:0] read_ptr;
 
@@ -37,39 +33,42 @@ module data_buffer (
 
     assign buffer_occ = write_ptr - read_ptr;
 
-    assign out = {
+    assign rx_data_out = {
         mem[read_ptr+3], mem[read_ptr+2], mem[read_ptr+1], mem[read_ptr]
     };
 
     /* svlint off sequential_block_in_always_ff */
+    /* svlint off explicit_if_else */
     // updating write_ptr and mem together makes more sense than seperate
-    always_ff @(ce)
+    always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) begin
             write_ptr <= 0;
-            mem       <= '{64{0}};
+            mem       <= '{68{0}};
         end else if (sync_clear) begin
             write_ptr <= 0;
-            mem       <= '{64{0}};
+            mem       <= '{68{0}};
         end else if (store_rx_data) begin
             write_ptr      <= write_ptr + 1;
             mem[write_ptr] <= rx_data_in;
         end else if (store_tx_data) begin
             write_ptr      <= write_ptr + 1;
             mem[write_ptr] <= tx_data_in[7:0];
-            if (store_tx_data == 2) begin
+            if (store_tx_data > 1) begin
                 write_ptr        <= write_ptr + 2;
                 mem[write_ptr+1] <= tx_data_in[15:8];
-            end else if (store_tx_data > 2) begin
-                write_ptr <= write_ptr + 4;
+            end
+            if (store_tx_data > 2) begin
+                write_ptr                            <= write_ptr + 4;
                 {mem[write_ptr+3], mem[write_ptr+2]} <= tx_data_in[31:16];
             end
         end else if (buffer_occ == 0) begin
             write_ptr <= 0;
-            mem       <= '{64{0}};
+            mem       <= '{68{0}};
         end else mem <= mem;
+    /* svlint on explicit_if_else */
     /* svlint on sequential_block_in_always_ff */
 
-    always_ff @(ce)
+    always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) read_ptr <= 0;
         else if (sync_clear) read_ptr <= 0;
         else if (get_tx_data) read_ptr <= read_ptr + 1;
