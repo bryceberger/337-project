@@ -1,4 +1,5 @@
 `default_nettype none
+`include "source/states.sv"
 
 class ahb_bus;
     typedef struct {
@@ -84,7 +85,7 @@ class ahb_bus;
         if (pak.write) this.hwdata = pak.data;
     endfunction
 
-    function reset();
+    function void reset();
         this.hsel   = 0;
         this.haddr  = 0;
         this.hsize  = 0;

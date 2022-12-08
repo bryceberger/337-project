@@ -1,6 +1,6 @@
 `default_nettype none `timescale 1ns / 10ps
-`include "test-benches/ahb_a_bus.sv"
-`include "test-benches/usb_a_bus.sv"
+`include "test-benches/ahb_bus.sv"
+`include "test-benches/usb_bus.sv"
 
 class rand_data;
     int num = 1;
@@ -31,6 +31,17 @@ module tb_ahb_usb ();
         STATUS_NAK = 'h8,
         STATUS_RX = 'h10,
         STATUS_TX = 'h20;
+
+    localparam bit [15:0] 
+        TX_SEND_DATA = 'h1,
+        TX_SEND_ACK = 'h2,
+        TX_SEND_NACK = 'h3,
+        TX_SEND_STALL = 'h4;
+
+    // testbench signals
+    int test_num;
+    string test_case;
+    string subtest_case;
 
     // general inputs
     logic clk, n_rst;
@@ -70,10 +81,108 @@ module tb_ahb_usb ();
         rx_dm = u_bus.dm;
     end
 
-    always_comb begin : TX_CONTROL_USB
-        u_bus.dp = tx_dp;
-        u_bus.dm = tx_dm;
-    end
+    // USB idles high
+    sequence TX_High; tx_dp == 1'b1 && tx_dm == 1'b0; endsequence
+    sequence TX_Low; tx_dp == 1'b0 && tx_dm == 1'b1; endsequence
+    sequence TX_Eop; tx_dp == tx_dm; endsequence
+    sequence TX_nEop; tx_dp != tx_dm; endsequence
+    sequence TX_Idle;
+        ($stable(
+            tx_dp
+        ) && $stable(
+            tx_dm
+        )) [* 53: 57];
+    endsequence
+
+    sequence Sync;
+        $fell(
+            tx_dp
+        ) && $rose(
+            tx_dm
+        ) ##0 (TX_Low [* 8: 10] ##1 TX_High [* 8: 10]) [* 3] ##1
+            TX_Low [* 16: 20];
+    endsequence
+
+    /* verilog_format: off */
+    sequence TokenPID;
+        TX_Low [*8:10]                 // 1
+        ##1 TX_High [*8:10]            // 0
+        ##1 (
+            (
+                TX_Low [*8:10]         // 0
+                ##1 TX_High [*8:10]    // 0
+                ##1 TX_Low [*32:40]    // 0111
+            ) or (
+                TX_Low [*16:20]        // 01
+                ##1 TX_High [*24:30]   // 011
+                ##1 TX_Low [*8:10]     // 0
+            )
+        );
+    endsequence
+
+    sequence DataPID;
+        TX_Low [*16:20]                // 11
+        ##1 TX_High [*8:10]            // 0
+        ##1 (
+            (
+                TX_Low [*8:10]         // 0
+                ##1 TX_High [*8:10]    // 0
+                ##1 TX_Low [*24:30]    // 011
+            ) or (
+                TX_High [*8:10]        // 1
+                ##1 TX_Low [*8:10]     // 0
+                ##1 TX_High [*16:20]   // 01
+            )
+        );
+    endsequence
+
+    sequence HandshakePID;
+        TX_High [*16:20]               // 01
+        ##1 (
+            ( // ACK
+                TX_Low [*8:10]         // 0
+                ##1 TX_High [*16:20]   // 01
+                ##1 TX_Low [*24:30]    // 011
+            ) or ( // NAK
+                TX_Low [*24:30]        // 011
+                ##1 TX_High [*16:20]   // 01
+                ##1 TX_Low [*8:10]     // 0
+            ) or ( // STALL
+                TX_High [*24:30]       // 111
+                ##1 TX_Low [*8:10]     // 0
+                ##1 TX_High [*8:10]    // 0
+                ##1 TX_Low [*8:10]     // 0
+            )
+        );
+    endsequence
+
+    sequence CorrectTokenPacket;
+        byte bit_count = 0;
+        TX_nEop [*] ##1 TX_Eop [*] ##1 TX_nEop;
+    endsequence
+
+    sequence CorrectDataPacket;
+        int bit_count;
+        TX_nEop [*] ##1 TX_Eop [*] ##1 TX_nEop;
+    endsequence
+
+    property BeginPacket;
+        @(posedge clk) disable iff (!n_rst)
+        $rose(d_mode) |-> (
+            (Sync ##1 ( // good sync
+                (TokenPID ##1 CorrectTokenPacket)
+                or
+                (DataPID ##1 CorrectDataPacket)
+                or
+                (HandshakePID ##1 (
+                    ##[0:3] TX_Eop // immediate EOP
+                    ##12 !d_mode // transfer inactive
+                ))
+            ))
+        )
+        // TODO fix for stuffed bits and CRC checking
+    endproperty
+    /* verilog_format: on */
 
     task reset_dut();
         n_rst = 1'b0;
@@ -86,9 +195,9 @@ module tb_ahb_usb ();
     endtask
 
     task check_received_data(input byte expected[]);
+        automatic int i = 0;
         if (expected.size() == 0) return;
-        int i = 0;
-        for (; i < expected.size() - 4; i += 4)
+        for (i = 0; i < expected.size() - 4; i += 4)
             a_bus.add(.addr(ADDR_DATA),
                       .data({
                           expected[i+3],
@@ -96,8 +205,8 @@ module tb_ahb_usb ();
                           expected[i+1],
                           expected[i]
                       }));
-        for (; i < expected.size(); i++)
-            a_bus.add(.addr(ADDR_DATA), .data(expected[i]), .size(0));
+        for (int j = i; j < expected.size(); j++)
+            a_bus.add(.addr(ADDR_DATA), .data(expected[j]), .size(0));
         a_bus.execute();
     endtask
 
@@ -125,7 +234,6 @@ module tb_ahb_usb ();
 
     initial begin
         $timeformat(-9, 2, " ns", 20);
-        disable TX_CONTROL_USB;
         // Initialize Test Case Navigation Signals
         test_case = "Initialization";
         test_num  = -1;
@@ -146,9 +254,9 @@ module tb_ahb_usb ();
         else $error("Outputs not zero after reset");
 
         // **************************************************
-        // Send USB Packets
+        // Receiving USB Packets
         // **************************************************
-        new_test("Sending USB Packets");
+        new_test("Receiving USB Packets");
         reset_dut();
 
         subtest_case = "Sending IN token (USB)";
@@ -183,8 +291,8 @@ module tb_ahb_usb ();
         subtest_case = "Sending 15 data";
         fork : REC_DATA_TEST
             begin
-                rng.size = 15;
-                rng.randomize();
+                rng.num = 15;
+                assert (rng.randomize() == 1);
                 u_bus.enqueue_usb_data(.data(rng.data));
                 u_bus.send_usb_packet();
             end
@@ -196,7 +304,7 @@ module tb_ahb_usb ();
             end
         join
         a_bus.add(.addr(ADDR_STATUS), .data(STATUS_DATA));
-        a_bus.add(.addr(ADDR_BUFFER_OCC), .data(rng.size));
+        a_bus.add(.addr(ADDR_BUFFER_OCC), .data(rng.num));
         a_bus.execute();
         check_received_data(rng.data);
 
@@ -209,8 +317,8 @@ module tb_ahb_usb ();
         a_bus.execute();
 
         subtest_case = "Sending 64 data";
-        rng.size     = 64;
-        rng.randomize();
+        rng.num      = 64;
+        assert (rng.randomize() == 1);
         u_bus.enqueue_usb_data(.data(rng.data));
         u_bus.send_usb_packet();
         subtest_case = "Reading AHB Memory";
@@ -218,6 +326,28 @@ module tb_ahb_usb ();
         a_bus.add(.addr(ADDR_BUFFER_OCC), .data(64));
         a_bus.execute();
         check_received_data(rng.data);
-    end
 
+        // **************************************************
+        // Sending USB Packets
+        // **************************************************
+        new_test("Sending USB Packets");
+        reset_dut();
+
+        subtest_case = "Sending ACK";
+        fork
+            begin
+                a_bus.add(.addr(ADDR_TX_CONTROL), .data(TX_SEND_ACK));
+                a_bus.execute();
+                #(CLK_PERIOD * 5);
+                disable CONSTANT_ASSERT_ACK_BEGIN;
+            end
+            begin : CONSTANT_ASSERT_ACK_BEGIN
+                while (1) begin
+                    @(posedge clk);
+                    assert property (BeginPacket);
+                end
+            end
+        join
+
+    end
 endmodule
