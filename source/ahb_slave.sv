@@ -37,7 +37,7 @@ module ahb_slave (
     output var [1:0] get_rx_data,
     output var [1:0] store_tx_data,
     output var [31:0] tx_data,
-    output var clear_data_buffer
+    output var clear
 );
 
     // address mapping
@@ -55,12 +55,12 @@ module ahb_slave (
     logic [3:0] addr;
     logic       enable;
 
-    assign enable            = hsel && htrans != IDLE;
-    assign d_mode            = tx_transfer_active;
-    assign tx_packet         = mem['hc][2:0] - 1;
-    assign tx_start          = |mem['hc];
-    assign tx_data           = hwdata;
-    assign clear_data_buffer = |mem['hd];
+    assign enable    = hsel && htrans != IDLE;
+    assign d_mode    = tx_transfer_active;
+    assign tx_packet = mem['hc][2:0] - 1;
+    assign tx_start  = |mem['hc];
+    assign tx_data   = hwdata;
+    assign clear     = |mem['hd];
 
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) get_rx_data <= 0;
@@ -69,16 +69,26 @@ module ahb_slave (
         if (!n_rst) store_tx_data <= 0;
         else store_tx_data <= hwrite && addr == 0 ? hsize + 1 : 0;
 
+    logic prev_transfer;
+    logic transfer_falling;
+    assign transfer_falling = prev_transfer && !rx_transfer_active;
+    always_ff @(posedge clk, negedge n_rst)
+        if (!n_rst) prev_transfer <= 0;
+        else prev_transfer <= rx_transfer_active;
+
+    logic clear_status;
+    assign clear_status = (addr == 4 && !write);
     /* svlint off sequential_block_in_always_ff */  // only assigning to mem
     always_ff @(posedge clk, negedge n_rst)
         if (!n_rst) mem <= '{18{0}};
         else begin
             mem['h4] <= {
-                4'h0,
-                rx_packet == NACK,
-                rx_packet == ACK,
-                rx_packet == OUT,
-                rx_packet == IN
+                3'h0,
+                transfer_falling ? rx_packet == NACK : clear_status ? 1'b0 : mem['hc][4],
+                transfer_falling ? rx_packet == ACK : clear_status ? 1'b0 : mem['hc][3],
+                transfer_falling ? rx_packet == OUT : clear_status ? 1'b0 : mem['hc][2],
+                transfer_falling ? rx_packet == IN : clear_status ? 1'b0 : mem['hc][1],
+                rx_data_ready ? 1'b1 : rx_transfer_active || clear_status ? 1'b0 : mem['hc][0]
             };
             mem['h5] <= {6'h0, tx_transfer_active, rx_transfer_active};
             mem['h6] <= {7'h0, rx_error};
@@ -86,17 +96,21 @@ module ahb_slave (
             mem['h8] <= buffer_occupancy;
 
             if (buffer_occupancy == 0) mem['hd] <= 0;
+            else mem['hd] <= mem['hd];
 
             // give tx_transfer_active a clock cycle to go high
             if (mem['hc][7] && !tx_transfer_active) mem['hc] <= 0;
             else if (mem['hc]) mem['hc] <= {1'b1, mem['hc][6:0]};
+            else mem['hc] <= mem['hc];
 
             // write if necessary
+            /* svlint off explicit_if_else */
             if (enable && write && !hresp && addr != 0) begin
                 mem[addr] <= hwdata[7:0];
                 if (size != 0) mem[addr+1] <= hwdata[15:8];
-                else if (size > 1) {mem[addr+3], mem[addr+2]} <= hwdata[31:16];
+                if (size > 1) {mem[addr+3], mem[addr+2]} <= hwdata[31:16];
             end
+            /* svlint on explicit_if_else */
         end
     /* svlint on sequential_block_in_always_ff */
 

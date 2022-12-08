@@ -1,6 +1,6 @@
 `timescale 1ns/10ps
 
-`include "test-benches/tb_usb_transmit.sv"
+`include "test-benches/usb_bus.sv"
 
 module tb_usb_rx();
 
@@ -284,7 +284,7 @@ usb_rx DUT (.*);
 
 USBModel usbm();
 
-tb_usb_transmit usb_tx = new;
+usb_bus usb_tx = new;
 
 assign dp = usb_tx.dp;
 assign dm = usb_tx.dm;
@@ -349,7 +349,7 @@ begin
     usb_tx.enqueue_usb_token(1'b0, 7'h3a, 4'ha);
     usb_tx.send_usb_packet();
 
-    usb_tx.enqueue_usb_data(1'b0, 4, {8'h00, 8'h01, 8'h02, 8'h03});
+    usb_tx.enqueue_usb_data(1'b0, {8'h00, 8'h01, 8'h02, 8'h03});
     usb_tx.send_usb_packet();
 
     usb_tx.enqueue_usb_handshake(2'd2);
