@@ -221,16 +221,19 @@ module usb_tx (
     end
 
     // Shift Register
+    /*
     flex_pts_sr #(
         .NUM_BITS (8),
         .SHIFT_MSB(1'b0)  // Make sure endianness is correct
     ) SHIFT_REGISTER (
         .*,
         .shift_enable(shiftEn),
-        .load_enable(get_tx_packet_data), // May need to be delayed 1 clock cycle
+        .load_enable(((beginBitPeriod == 1'b1) && (bitNum == 3'd))),
         .parallel_in(tx_packet_data),
         .serial_out(nxtBit)
     );
+    */
+    assign nxtBit = tx_packet_data[bitNum];
 
     // Bit-Stuffer
     always_ff @(negedge n_rst, posedge clk)
@@ -244,6 +247,7 @@ module usb_tx (
         if (shiftEn && stuff_source)
             if (numOne == 5) nxt_numOne = 0;
             else nxt_numOne = numOne + 1;
+        else if (shiftEn) nxt_numOne = 0;
         else nxt_numOne = numOne;
 
     always_comb
@@ -257,6 +261,7 @@ module usb_tx (
 
     always_comb
         if (beginBitPeriod == 1'b1) begin
+        		{dp, dm} = {prev_dp, prev_dm};
             if (stuffEn == 1'b1) begin
                 {dp, dm} = ~{prev_dp, prev_dm};
             end else if (syncEn == 1'b1) begin
